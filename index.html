@@ -188,7 +188,7 @@ table.nt th{font-weight:600;background:var(--surface2)}
 .nbi span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nbmain{min-width:0}
 .nbt{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);font-size:17px;font-weight:600;margin-bottom:8px}
-.nbb{width:100%;min-height:60vh;padding:12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);line-height:1.55;resize:vertical}
+.nbb{width:100%;min-height:34vh;padding:12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);line-height:1.55;resize:vertical}
 @media (max-width:760px){.nb{grid-template-columns:1fr}}
 .tbadge{margin-left:6px;font-size:11px;padding:1px 6px;border-radius:9px;background:var(--bad-soft);color:var(--bad);font-weight:600}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:7px;z-index:60;max-width:90vw}
@@ -210,9 +210,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-04 16:55";</script>
-<script src="config.js?v=202611041655"></script>
-<script src="sync.js?v=202611041655"></script>
+<script>window.MD_BUILD="2026-11-04 18:05";</script>
+<script src="config.js?v=202611041805"></script>
+<script src="sync.js?v=202611041805"></script>
 <script>
 (function(){
 'use strict';
@@ -273,7 +273,7 @@ function cellHtml(c,edit){c=c||{};var st=cellStyle(c);return '<td'+(edit?' conte
 function tblInner(rows,edit){var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});return rows.map(function(r){var h='';for(var i=0;i<w;i++)h+=cellHtml(r[i],edit);return '<tr>'+h+'</tr>'}).join('')}
 function tblBlock(n,list){
   var tb=n&&n.table;if(!tb||!tb.rows||!tb.rows.length)return '';
-  return '<div class="tblwrap" data-list="'+list+'" data-ts="'+esc(n.ts)+'"><table class="nt xl"><tbody>'+tblInner(tb.rows,true)+'</tbody></table><div class="tblbar"><button type="button" class="btn ghost sm" data-tb="addrow">Add row</button><button type="button" class="btn ghost sm" data-tb="addcol">Add column</button><button type="button" class="btn ghost sm" data-tb="delrow">Remove last row</button><button type="button" class="btn ghost sm" data-tb="delcol">Remove last column</button></div></div>';
+  return '<div class="tblwrap" data-list="'+list+'" data-ts="'+esc(n.ts)+'"><table class="nt xl"><tbody>'+tblInner(tb.rows,true)+'</tbody></table><div class="tblbar"><button type="button" class="btn ghost sm" data-tb="addrow">Add row</button><button type="button" class="btn ghost sm" data-tb="addcol">Add column</button><button type="button" class="btn ghost sm" data-tb="delrow">Remove last row</button><button type="button" class="btn ghost sm" data-tb="delcol">Remove last column</button>'+(list==='nbtables'?'<button type="button" class="btn danger sm" data-tb="nbdel">Remove table</button>':'')+'</div></div>';
 }
 function pendHtml(k){
   var tb=k==='nt'?ntTable:prTable;if(!tb)return '';
@@ -320,8 +320,8 @@ function parseTable(html,cb){
   document.body.appendChild(fr);
 }
 function readRows(w){
-  var ts=+w.getAttribute('data-ts'),list=w.getAttribute('data-list'),c=currentCase();if(!c)return null;
-  var arr=c[list]||[],idx=-1;arr.forEach(function(n,i){if(n.ts===ts)idx=i});
+  var ts=+w.getAttribute('data-ts'),list=w.getAttribute('data-list'),c=list==='nbtables'?notes.filter(function(x){return x.id===nbShown})[0]:currentCase();if(!c)return null;
+  var arr=(list==='nbtables'?c.tables:c[list])||[],idx=-1;arr.forEach(function(n,i){if(n.ts===ts)idx=i});
   if(idx<0||!arr[idx].table)return null;
   var old=arr[idx].table.rows,rows=[];
   w.querySelectorAll('tr').forEach(function(tr,ri){var r=[];tr.querySelectorAll('td').forEach(function(td,ci){var o=Object.assign({},(old[ri]||[])[ci]||{});o.v=td.textContent.replace(/ /g,' ');r.push(o)});rows.push(r)});
@@ -329,6 +329,7 @@ function readRows(w){
 }
 function commitTbl(info,rows){
   var arr=info.arr.map(function(n,i){if(i!==info.idx)return n;var m=Object.assign({},n);m.table={rows:rows};return m});
+  if(info.list==='nbtables'){nbSetTables(arr);return}
   var o={};o[info.list]=arr;patch(openId,o);
 }
 function saveTbl(w){var info=readRows(w);if(!info)return;if(JSON.stringify(info.rows)===JSON.stringify(info.arr[info.idx].table.rows))return;commitTbl(info,info.rows)}
@@ -724,18 +725,27 @@ function nbList(){
   var l=nbSorted().filter(function(n){return !q||((n.title||'')+' '+(n.body||'')).toLowerCase().indexOf(q)>-1});
   box.innerHTML=l.length?l.map(function(n){var sn=String(n.body||'').replace(/\s+/g,' ').slice(0,80);return '<button type="button" class="nbi'+(n.id===nbSel?' on':'')+'" data-nbsel="'+n.id+'"><b>'+esc(nbTitleOf(n))+'</b><span class="muted">'+stampOf(n.updatedAt||n.createdAt||Date.now())+'</span><span class="muted">'+esc(sn)+'</span></button>'}).join(''):'<div class="muted" style="padding:10px">'+(notes.length?'No notes match.':'No notes yet. Click New note.')+'</div>';
 }
+function nbTablesHtml(n){return (n.tables||[]).map(function(t){return '<div style="margin:12px 0">'+tblBlock({ts:t.ts,table:t.table},'nbtables')+'</div>'}).join('')}
+function nbSetTables(arr){
+  var id=nbShown;if(!id||!nbCol)return;
+  var n=notes.filter(function(x){return x.id===id})[0];if(n)n.tables=arr;
+  var bx=$('#nbTables');if(bx&&n){bx.innerHTML=nbTablesHtml(n);bx.setAttribute('data-sig',JSON.stringify(arr))}
+  write('nb-'+id,function(){return nbCol.doc(id).update({tables:arr,updatedAt:Date.now()})});
+}
 function nbEditor(){
   var m=$('#nbMain');if(!m)return;
   var n=notes.filter(function(x){return x.id===nbSel})[0];
   if(!n){m.innerHTML='<div class="empty"><h2>Notebook</h2>Click New note to start typing.</div>';nbShown=null;return}
   nbShown=n.id;
-  m.innerHTML='<input id="nbTitle" class="nbt" type="text" placeholder="Title (optional)" value="'+esc(n.title||'')+'" aria-label="Note title"><textarea id="nbBody" class="nbb" placeholder="Type anything here" aria-label="Note">'+esc(n.body||'')+'</textarea><div class="add"><button type="button" class="btn ghost" id="nbStamp">Insert date and time</button><button type="button" class="btn danger" id="nbDel">Delete note</button><span class="muted" id="nbMsg" style="align-self:center;font-size:12px">Saves automatically</span></div>';
+  m.innerHTML='<input id="nbTitle" class="nbt" type="text" placeholder="Title (optional)" value="'+esc(n.title||'')+'" aria-label="Note title"><textarea id="nbBody" class="nbb" placeholder="Type anything here. You can also paste a table from Excel and it keeps its colours." aria-label="Note">'+esc(n.body||'')+'</textarea><div id="nbTables" data-sig=\''+esc(JSON.stringify(n.tables||[]))+'\'>'+nbTablesHtml(n)+'</div><div class="add"><button type="button" class="btn ghost" id="nbStamp">Insert date and time</button><button type="button" class="btn danger" id="nbDel">Delete note</button><span class="muted" id="nbMsg" style="align-self:center;font-size:12px">Saves automatically</span></div>';
 }
 function renderNotebook(){
   if(!nbSel&&notes.length)nbSel=nbSorted()[0].id;
   nbList();
   var n=notes.filter(function(x){return x.id===nbSel})[0];
   if(nbSel!==nbShown||(!n&&nbShown)||(!$('#nbTitle')&&n))nbEditor();
+  var bx=$('#nbTables');
+  if(n&&bx){var sg=JSON.stringify(n.tables||[]);if(bx.getAttribute('data-sig')!==sg&&!(document.activeElement&&bx.contains(document.activeElement))){bx.innerHTML=nbTablesHtml(n);bx.setAttribute('data-sig',sg)}}
 }
 function nbSave(){
   nbTimer=null;var id=nbShown;if(!id||!nbCol)return;
@@ -797,6 +807,7 @@ document.addEventListener('click',function(e){
     var act=tbb.getAttribute('data-tb');
     if(act==='dropnt'){ntTable=null;showPend('nt');return}
     if(act==='droppr'){prTable=null;showPend('pr');return}
+    if(act==='nbdel'){var tw0=tbb.closest('.tblwrap'),i0=tw0&&readRows(tw0);if(!i0)return;nbSetTables(i0.arr.filter(function(x,i){return i!==i0.idx}));return}
     var tw=tbb.closest('.tblwrap'),info=tw&&readRows(tw);if(!info)return;
     var rws=info.rows,wd=rws[0]?rws[0].length:1;
     if(act==='addrow'){var nr=[];for(var q=0;q<wd;q++)nr.push({v:''});rws.push(nr)}
@@ -1000,6 +1011,19 @@ setInterval(autoSave,5000);
 document.addEventListener('paste',function(e){
   var t=e.target;
   if(t&&t.closest&&t.closest('table.nt.xl')){e.preventDefault();var tx=(e.clipboardData&&e.clipboardData.getData('text/plain')||'').replace(/\s+/g,' ');document.execCommand('insertText',false,tx);return}
+  if(t&&t.id==='nbBody'){
+    var h2=e.clipboardData&&e.clipboardData.getData('text/html');
+    if(!h2||!/<table/i.test(h2))return;
+    var pl2=e.clipboardData.getData('text/plain'),a0=t.selectionStart,a1=t.selectionEnd;
+    e.preventDefault();
+    parseTable(h2,function(tb){
+      if(!tb){t.setRangeText(pl2,a0,a1,'end');nbSched();return}
+      var nn2=notes.filter(function(x){return x.id===nbShown})[0];if(!nn2)return;
+      nbSetTables((nn2.tables||[]).concat([{ts:Date.now(),table:{rows:tb.rows}}]));
+      toast(tb.cut?'Table added. Only the first 200 rows and 30 columns were kept':'Table added to this note');
+    });
+    return;
+  }
   if(!t||(t.id!=='ntText'&&t.id!=='prText'))return;
   var html=e.clipboardData&&e.clipboardData.getData('text/html');
   if(!html||!/<table/i.test(html))return;
