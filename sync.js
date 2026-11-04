@@ -4,7 +4,7 @@
   'use strict';
   var CFG = window.MD_CONFIG || {};
   var SCOPES = 'Files.ReadWrite User.Read offline_access';
-  var AUTH = 'https://login.microsoftonline.com/common/oauth2/v2.0/';
+  var AUTH = 'https://login.microsoftonline.com/' + (CFG.tenant || 'common') + '/oauth2/v2.0/';
   var GRAPH = 'https://graph.microsoft.com/v1.0';
   var ROOT = 'Mortgage Desk Data';
   var COLS = ['cases', 'notebook'];
