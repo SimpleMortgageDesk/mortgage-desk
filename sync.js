@@ -3,10 +3,11 @@
 (function () {
   'use strict';
   var CFG = window.MD_CONFIG || {};
-  var SCOPES = 'Files.ReadWrite User.Read offline_access';
+  var SCOPES = 'Files.ReadWrite.AppFolder User.Read offline_access';
   var AUTH = 'https://login.microsoftonline.com/' + (CFG.tenant || 'common') + '/oauth2/v2.0/';
   var GRAPH = 'https://graph.microsoft.com/v1.0';
-  var ROOT = 'Mortgage Desk Data';
+  var ROOT = 'Apps / Mortgage Desk';
+  var APP = '/me/drive/special/approot';
   var COLS = ['cases', 'notebook'];
   var REDIRECT = CFG.redirectUri || (location.origin + location.pathname.replace(/[^\/]*$/, ''));
   var $ = function (i) { return document.getElementById(i); };
@@ -26,8 +27,8 @@
   window.mdToast = toast;
 
   /* ---------- tokens (Microsoft sign-in, PKCE, no library) ---------- */
-  function readTok() { try { return JSON.parse(localStorage.getItem('md.tok') || 'null'); } catch (e) { return null; } }
-  function writeTok(t) { try { if (t) localStorage.setItem('md.tok', JSON.stringify(t)); else localStorage.removeItem('md.tok'); } catch (e) {} }
+  function readTok() { try { return JSON.parse(localStorage.getItem('md.tok2') || 'null'); } catch (e) { return null; } }
+  function writeTok(t) { try { if (t) localStorage.setItem('md.tok2', JSON.stringify(t)); else localStorage.removeItem('md.tok2'); } catch (e) {} }
   var memTok = null;
   function tok() { return memTok || (memTok = readTok()); }
   function setTok(t) { memTok = t; writeTok(t); }
@@ -93,7 +94,7 @@
   function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); }
   function snap(col) { return { docs: Object.keys(mem[col]).map(function (id) { var d = mem[col][id].data; return { id: id, data: function () { return clone(d); } }; }) }; }
   function notify(col) { subs[col].forEach(function (cb) { try { cb(snap(col)); } catch (e) { console.error(e); } }); }
-  var docPath = function (col, id) { return '/me/drive/root:/' + enc(ROOT + '/' + col + '/' + id + '.json'); };
+  var docPath = function (col, id) { return APP + ':/' + enc(col + '/' + id + '.json'); };
 
   /* ---------- status text ---------- */
   var st = { offline: false, busy: '', last: 0, err: '' };
@@ -182,7 +183,7 @@
 
   /* ---------- reading (delta by eTag) ---------- */
   async function listRemote(col) {
-    var out = [], url = '/me/drive/root:/' + enc(ROOT + '/' + col) + ':/children?$select=id,name,eTag&$top=200';
+    var out = [], url = APP + ':/' + enc(col) + ':/children?$select=id,name,eTag&$top=200';
     while (url) {
       var r = await gfetch(url);
       if (r.status === 404) return out;
@@ -292,7 +293,7 @@
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Account</h2><button class="btn ghost" data-a="close">Close</button></div>' +
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
-        '<p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
+        '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
         '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
@@ -320,15 +321,27 @@
       var a = e.target.closest && e.target.closest('[data-a]'); if (!a) return; a = a.getAttribute('data-a');
       if (a === 'close') ov.remove();
       else if (a === 'sync') { say('Syncing…'); await flush(); await pull(); say(st.err || (st.offline ? 'Offline. Will retry.' : 'Up to date.')); }
-      else if (a === 'folder') { try { var r = await gfetch('/me/drive/root:/' + enc(ROOT)); var j = await r.json(); if (j.webUrl) window.open(j.webUrl, '_blank'); else say('Folder not created yet.'); } catch (x) { say('Could not reach OneDrive.'); } }
-      else if (a === 'out') {
-        if (pending() && !confirm(pending() + ' change(s) have not reached OneDrive yet and will be lost. Sign out anyway?')) return;
-        if (!pending() && !confirm('Sign out and remove cases from this device?')) return;
-        await idbClearAll(); setTok(null); try { localStorage.removeItem('md.pkce'); } catch (x) {} location.reload();
-      }
+      else if (a === 'folder') { try { var r = await gfetch(APP); var j = await r.json(); if (j.webUrl) window.open(j.webUrl, '_blank'); else say('Folder not created yet.'); } catch (x) { say('Could not reach OneDrive.'); } }
+      else if (a === 'out') { ov.remove(); signOut(); }
     });
   }
-  document.addEventListener('click', function (e) { var b = e.target && e.target.closest && e.target.closest('#settingsBtn'); if (b) { e.preventDefault(); e.stopPropagation(); openAccount(); } }, true);
+  async function signOut() {
+    if (pending()) { try { await flush(); } catch (e) {} }
+    var msg = pending()
+      ? pending() + ' change(s) have not reached OneDrive yet and will be lost. Log out anyway?'
+      : 'Log out? Cases are removed from this device and load again when you sign in. Signing in again also loads the latest version of the app.';
+    if (!confirm(msg)) return;
+    try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } } catch (e) {}
+    try { if (navigator.serviceWorker) { var rg = await navigator.serviceWorker.getRegistrations(); await Promise.all(rg.map(function (r) { return r.unregister(); })); } } catch (e) {}
+    await idbClearAll(); setTok(null);
+    try { localStorage.removeItem('md.pkce'); } catch (e) {}
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#settingsBtn,#logoutBtn'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.id === 'logoutBtn') signOut(); else openAccount();
+  }, true);
 
   /* ---------- downloads (Backup / CSV buttons) ---------- */
   function saveFile(o) {
@@ -356,6 +369,7 @@
   }
   async function handleRedirect() {
     var p = new URLSearchParams(location.search);
+    if (p.get('fresh') && !p.get('code') && !p.get('error')) { history.replaceState(null, '', location.pathname); return; }
     if (!p.get('code') && !p.get('error')) return;
     var clean = function () { history.replaceState(null, '', location.pathname); };
     if (p.get('error')) { var m = p.get('error_description') || p.get('error'); clean(); throw new Error(m); }
@@ -369,11 +383,24 @@
       var t = tok(); t.account = { name: me.displayName || '', mail: me.mail || me.userPrincipalName || '' }; setTok(t);
     } catch (e) {}
   }
+  /* One-time move: cases kept on this device are uploaded to the app's own OneDrive folder. */
+  function migrateToAppFolder() {
+    var done = null; try { done = localStorage.getItem('md.loc2'); } catch (e) {}
+    if (done) return;
+    COLS.forEach(function (col) {
+      Object.keys(mem[col]).forEach(function (id) {
+        var d = mem[col][id]; d.etag = null; d.itemId = null; persistDoc(col, id);
+        var k = col + '/' + id; if (!dirty[k]) { var nd = { k: k, col: col, id: id, kind: 'set', patch: {}, v: ++vctr }; dirty[k] = nd; idbPut('dirty', nd); }
+      });
+    });
+    try { localStorage.setItem('md.loc2', '1'); } catch (e) {}
+  }
   async function boot() {
     addSyncBadge();
     await openIdb(); await loadCache();
     try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
     if (!tok()) { showSignIn(''); return; }
+    migrateToAppFolder();
     var o = $('mdSign'); if (o) o.remove();
     readyRes({ collection: collection });
     setState();
