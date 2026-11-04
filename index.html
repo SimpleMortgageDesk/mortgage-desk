@@ -431,6 +431,16 @@ function appRow(a,i){
    '<label class="f wide">Current address<input data-a="address" value="'+esc(a.address)+'"></label></div></div>';
 }
 var pendingNotes=[];
+function pickClient(){
+  var list=cases.slice().sort(function(a,b){return names(a).toLowerCase()<names(b).toLowerCase()?-1:1});
+  if(!list.length)return '';
+  return '<label class="f" style="margin-bottom:12px">Start from an existing client (copies their details)<select id="fromClient"><option value="">Choose a client, or leave blank for a new one</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(names(x)+(x.clientNo?' ('+x.clientNo+')':''))+'</option>'}).join('')+'</select></label>';
+}
+function startFrom(src){
+  var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
+  var d={stage:'enquiry',type:'Purchase',repayment:'repayment',applicants:ap,oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'New case for an existing client: another property for '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+'.'}]};
+  closeDrawer();openDrawer(null,d);
+}
 function openDrawer(id,draft){
   openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;pendingNotes=(draft&&draft.notes)||[];
   var c=id?cases.filter(function(x){return x.id===id})[0]:null;
@@ -439,11 +449,11 @@ function openDrawer(id,draft){
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
-  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft?'New case from PDF. Check the details, then save':'New case')+'</div><h2 id="dTitle">'+esc(id?names(c):'Add a client')+'</h2>'+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
+  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><h2 id="dTitle">'+esc(id?names(c):'Add a client')+'</h2>'+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+money(c.monthlyPayment)+'</b><span>Monthly</span></div><div><b>'+(c.fixedUntil?fd(c.fixedUntil):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div><div><b>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'—')+'</b><span>Mortgage expiry</span></div></div></div>'+
-  '<button class="btn ghost" data-close aria-label="Close">Close</button></div>'+
+  '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   '<div id="liveNotes"></div><fieldset><legend>Clients</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><label class="f" style="margin-top:12px">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
+   '<div id="liveNotes"></div>'+(!id&&!draft?pickClient():'')+'<fieldset><legend>Clients</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><label class="f" style="margin-top:12px">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
    '<fieldset><legend>Case</legend><div class="grid">'+
      fld('clientNo','Client number',c.clientNo)+
      sel('stage','Stage',c.stage,STAGES.map(function(s){return [s.id,s.label]}).concat([['lost','Closed lost']]))+
@@ -474,8 +484,9 @@ function openDrawer(id,draft){
   var first=$('#drawer [data-a="name"]');if(first&&!id)first.focus();
   ntDraft=(id&&c.noteDraft)||'';prDraft=(id&&c.protDraft)||'';lastND=ntDraft;lastPD=prDraft;renderLive();
   lastAuto=id?JSON.stringify(collectForm()):null;
+  newBase=id?null:JSON.stringify(collectForm());
 }
-function closeDrawer(){var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null}
+function closeDrawer(){var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null;newBase=null}
 function currentCase(){return openId?cases.filter(function(x){return x.id===openId})[0]:null}
 
 function renderLive(){
@@ -680,6 +691,7 @@ document.addEventListener('click',function(e){
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
+  if(t.id==='dupBtn'){var sc=cases.filter(function(x){return x.id===openId})[0];if(sc){autoSave();startFrom(sc)}return}
   if(t.id==='delBtn'){
     if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}
     var id=openId;closeDrawer();write(id,function(){return col.doc(id).delete()}).then(function(){toast('Case deleted')});return;
@@ -719,6 +731,7 @@ document.addEventListener('change',function(e){
   }
   if(t.id==='stageSel'){stageFilter=t.value;render()}
   if(t.id==='sortSel'){sortBy=t.value;try{localStorage.setItem('sortBy',sortBy)}catch(e){}render()}
+  if(t.id==='fromClient'&&t.value){var s2=cases.filter(function(x){return x.id===t.value})[0];if(s2)startFrom(s2)}
   if(t.id==='pdfIn'){var fl=Array.from(t.files||[]);t.value='';if(fl.length)importPdfs(fl)}
 });
 document.addEventListener('input',function(e){
@@ -834,7 +847,7 @@ function importPdfs(files){
 }
 
 /* ---------- auto save (every 5 seconds) ---------- */
-var lastAuto=null,lastND='',lastPD='';
+var lastAuto=null,newBase=null,lastND='',lastPD='';
 function draftSave(){
   var a=$('#ntText'),b=$('#prText'),o={};
   if(a&&a.value!==lastND){lastND=a.value;ntDraft=a.value;o.noteDraft=a.value}
@@ -847,7 +860,7 @@ function autoSave(){
     var dn=$('#drawer');
     if(dn&&!dn.hidden&&$('#caseForm')){
       var nd=collectForm();
-      if(nd.applicants.length){
+      if(nd.applicants.length&&JSON.stringify(nd)!==newBase){
         creatingNew=true;
         if(!nd.clientNo)nd.clientNo=nextClientNo();
         var nref=col.doc();nd.createdAt=Date.now();nd.updatedAt=nd.createdAt;nd.tasks=[];nd.notes=pendingNotes;
