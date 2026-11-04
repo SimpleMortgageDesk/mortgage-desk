@@ -149,6 +149,10 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var
 .add input[type=text]{flex:1;min-width:160px;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .add input[type=date]{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .note{border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:10px 0;overflow-wrap:anywhere;white-space:pre-wrap}
+.tblwrap{overflow-x:auto;max-width:100%}
+table.nt{width:auto;min-width:0;border-collapse:collapse;font-size:13px;margin:2px 0}
+table.nt th,table.nt td{padding:4px 9px;border:1px solid var(--line);text-align:left;vertical-align:top;white-space:normal;font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--bg)}
+table.nt th{font-weight:600;background:var(--surface2)}
 .note small{display:block;color:var(--muted);font-family:var(--mono);font-size:11px;margin-bottom:2px}
 .np{--c:#0A6B50;padding:6px 9px;margin:4px 0;border-radius:5px;border-left:4px solid var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
 .np1{--c:#2A62A8}.np2{--c:#B07A00}.np3{--c:#9A2F7C}.np4{--c:#C0392B}.np5{--c:#5B47B8}
@@ -247,7 +251,23 @@ function reviewOf(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-
 function firstName(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim()}).filter(Boolean)[0]||'';return a.replace(/^(mr|mrs|miss|ms|dr)\.?\s+/i,'').toLowerCase()}
 function cnum(c){var m=/(\d+)/.exec(c.clientNo||'');return m?+m[1]:1e9}
 function odLink(u){u=String(u||'').trim();return /^https?:\/\//i.test(u)?'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open OneDrive folder</a>':''}
-function paras(t){return String(t||'').split(/\n+/).filter(function(x){return x.trim()}).map(function(p,i){return '<div class="np np'+(i%6)+'">'+esc(p)+'</div>'}).join('')}
+function cellTxt(c){c=String(c);if(c.length>1&&c.charAt(0)==='"'&&c.charAt(c.length-1)==='"')c=c.slice(1,-1).replace(/""/g,'"');return c.trim()}
+function tableHtml(rows){
+  var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});
+  function tr(r,tag){var h='';for(var i=0;i<w;i++)h+='<'+tag+'>'+esc(r[i]==null?'':r[i])+'</'+tag+'>';return '<tr>'+h+'</tr>'}
+  return '<div class="tblwrap"><table class="nt"><thead>'+tr(rows[0],'th')+'</thead><tbody>'+rows.slice(1).map(function(r){return tr(r,'td')}).join('')+'</tbody></table></div>';
+}
+function paras(t){
+  var lines=String(t||'').replace(/\r\n?/g,'\n').split('\n'),out=[],tbl=[],k=0;
+  function flush(){if(!tbl.length)return;out.push('<div class="np np'+(k++%6)+'">'+(tbl.length>1?tableHtml(tbl):esc(tbl[0].join('  ')))+'</div>');tbl=[]}
+  lines.forEach(function(l){
+    if(l.indexOf('\t')>=0){var cells=l.split('\t').map(cellTxt);while(cells.length&&cells[cells.length-1]==='')cells.pop();if(cells.length>1||cells.length===1&&cells[0]){tbl.push(cells);return}}
+    flush();
+    if(l.trim())out.push('<div class="np np'+(k++%6)+'">'+esc(l)+'</div>');
+  });
+  flush();
+  return out.join('');
+}
 function nextTask(c){var d=(c.tasks||[]).filter(function(t){return !t.done&&t.due}).map(function(t){return t.due}).sort();return d[0]||''}
 function taskCell(c){var d=nextTask(c);return '<td>'+(d?'<span class="chip '+tone(d)+'">'+fd(d)+'</span>':'<span class="muted">—</span>')+'</td>'}
 function sortList(l){
@@ -500,7 +520,7 @@ function renderLive(){
     '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
-    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step">'+esc(ntDraft)+'</textarea></label><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
+    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
     (notesAll?ns:ns.slice(0,1)).map(function(n){return '<div class="note"><small>'+stampOf(n.ts)+(notesAll||ns.length<2?'':' (latest)')+'</small>'+paras(n.text)+'</div>'}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset><div style="margin-top:14px">'+tasksHtml+'</div>';
 }
 var secHidden={};
