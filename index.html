@@ -258,9 +258,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 12:13";</script>
-<script src="config.js?v=202611051213"></script>
-<script src="sync.js?v=202611051213"></script>
+<script>window.MD_BUILD="2026-11-05 20:59";</script>
+<script src="config.js?v=202611052059"></script>
+<script src="sync.js?v=202611052059"></script>
 <script>
 (function(){
 'use strict';
@@ -443,13 +443,14 @@ function allEvents(){
   var out=[];cases.forEach(function(c){if(c.stage!=='lost')out=out.concat(caseEvents(c))});
   return out.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0});
 }
+function reviewEvents(){return allEvents().filter(function(e){return e.kind==='review'})}
 function nextEvent(c){
   var e=caseEvents(c).sort(function(a,b){return a.date<b.date?-1:1});
   var over=e.filter(function(x){return diff(x.date)<0})[0];
   return over||e.filter(function(x){return diff(x.date)>=0})[0]||null;
 }
 function tone(date){var n=diff(date);return n<0?'bad':n<=7?'warn':''}
-function dueCount(){return allEvents().filter(function(e){return diff(e.date)<0}).length}
+function dueCount(){return reviewEvents().filter(function(e){return diff(e.date)<0}).length}
 
 /* ---------- filtering ---------- */
 function visible(){
@@ -539,11 +540,11 @@ function casesHTML(){
 
 /* ---------- reminders ---------- */
 function remindersHTML(){
-  var ev=allEvents(),q=query.trim().toLowerCase();
+  var ev=reviewEvents(),q=query.trim().toLowerCase();
   if(q)ev=ev.filter(function(e){return (e.who+' '+e.label).toLowerCase().indexOf(q)>-1});
   var g=[['Overdue','bad',function(n){return n<0}],['Next 7 days','',function(n){return n>=0&&n<=7}],['Next 30 days','',function(n){return n>7&&n<=30}],['Later this year and beyond','',function(n){return n>30}]];
-  var h='<div class="pagehead"><h1>Reminders</h1><span class="muted">Built from the dates and tasks on each case</span></div>';
-  if(!ev.length)return h+'<div class="empty"><h2>Nothing due</h2>Dates such as offer expiry, target completion and rate-end reviews appear here as you fill them in on a case.</div>';
+  var h='<div class="pagehead"><h1>Reminders</h1><span class="muted">Mortgage review dates only. Tasks are in the Tasks tab</span></div>';
+  if(!ev.length)return h+'<div class="empty"><h2>No reviews due</h2>Completed cases appear here when they have a review date, or a fixed-rate end date (the review is set six months before it).</div>';
   g.forEach(function(x){
     var items=ev.filter(function(e){return x[2](diff(e.date))});
     if(!items.length)return;
