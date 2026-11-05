@@ -189,6 +189,17 @@ table.nt th{font-weight:600;background:var(--surface2)}
 .nbi span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nbmain{min-width:0}
 .nbt{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);font-size:17px;font-weight:600;margin-bottom:8px}
+.rtbar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px;padding:6px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.rtbar button{min-width:30px;height:30px;padding:0 7px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;cursor:pointer;font-size:13px}
+.rtbar button:hover{border-color:var(--accent)}
+.rtbar select{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;padding:0 6px;font-size:13px}
+.rtbar .sw{min-width:22px;width:22px;height:22px;padding:0;border-radius:50%}
+.rtbar .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+.rtbar input[type=color]{width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px;background:var(--bg);cursor:pointer}
+.rtbar label{font-size:12px;color:var(--muted)}
+.nbrt{overflow:auto;resize:vertical;overflow-wrap:anywhere}
+.nbrt:empty:before{content:attr(data-ph);color:var(--muted)}
+.nbrt ul,.nbrt ol{margin:6px 0 6px 22px}
 .nbb{width:100%;min-height:34vh;padding:12px;border:1px solid var(--line);border-radius:7px;background:var(--surface);line-height:1.55;resize:vertical}
 @media (max-width:760px){.nb{grid-template-columns:1fr}}
 .tbadge{margin-left:6px;font-size:11px;padding:1px 6px;border-radius:9px;background:var(--bad-soft);color:var(--bad);font-weight:600}
@@ -211,9 +222,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 09:27";</script>
-<script src="config.js?v=202611050927"></script>
-<script src="sync.js?v=202611050927"></script>
+<script>window.MD_BUILD="2026-11-05 10:09";</script>
+<script src="config.js?v=202611051009"></script>
+<script src="sync.js?v=202611051009"></script>
 <script>
 (function(){
 'use strict';
@@ -739,6 +750,65 @@ function nbList(){
   var l=nbSorted().filter(function(n){return !q||((n.title||'')+' '+(n.body||'')).toLowerCase().indexOf(q)>-1});
   box.innerHTML=l.length?l.map(function(n){var sn=String(n.body||'').replace(/\s+/g,' ').slice(0,80);return '<button type="button" class="nbi'+(n.id===nbSel?' on':'')+'" data-nbsel="'+n.id+'"><b>'+esc(nbTitleOf(n))+'</b><span class="muted">'+stampOf(n.updatedAt||n.createdAt||Date.now())+'</span><span class="muted">'+esc(sn)+'</span></button>'}).join(''):'<div class="muted" style="padding:10px">'+(notes.length?'No notes match.':'No notes yet. Click New note.')+'</div>';
 }
+var NB_FONTS={'Arial':'Arial, Helvetica, sans-serif','Georgia':'Georgia, serif','Times New Roman':'"Times New Roman", Times, serif','Verdana':'Verdana, Geneva, sans-serif','Trebuchet MS':'"Trebuchet MS", sans-serif','Courier New':'"Courier New", monospace'};
+var NB_SIZES={1:10,2:13,3:16,4:19,5:24,6:32,7:44};
+var NB_NAMED={'x-small':10,'small':13,'medium':16,'large':19,'x-large':24,'xx-large':32,'xxx-large':44};
+function nbColor(v){v=String(v||'').trim();if(/^#[0-9a-f]{3}$/i.test(v))v='#'+v.charAt(1)+v.charAt(1)+v.charAt(2)+v.charAt(2)+v.charAt(3)+v.charAt(3);var h=safeColor(v)||rgbHex(v);return h?h.toLowerCase():''}
+function nbFontOf(v){var f=String(v||'').split(',')[0].replace(/["']/g,'').trim().toLowerCase();for(var k in NB_FONTS)if(k.toLowerCase()===f)return NB_FONTS[k];return ''}
+function nbSizeOf(v){v=String(v||'').trim().toLowerCase();if(NB_NAMED[v])return NB_NAMED[v];var m=/^([\d.]+)px$/.exec(v);if(m){var n=Math.round(+m[1]);return n>=8&&n<=72?n:0}return 0}
+function nbClean(html){
+  var doc=new DOMParser().parseFromString('<body>'+String(html||'')+'</body>','text/html'),out=document.createElement('div');
+  var TAG={b:'b',strong:'b',i:'i',em:'i',u:'u',s:'s',strike:'s',del:'s',ul:'ul',ol:'ol',li:'li',div:'div',p:'div',h1:'div',h2:'div',h3:'div',span:'span',font:'span'};
+  function walk(src,dst,depth){
+    if(depth>30)return;
+    Array.prototype.forEach.call(src.childNodes,function(n){
+      if(n.nodeType===3){dst.appendChild(document.createTextNode(n.nodeValue));return}
+      if(n.nodeType!==1)return;
+      var tg=n.tagName.toLowerCase();
+      if(tg==='br'){dst.appendChild(document.createElement('br'));return}
+      if(/^(script|style|iframe|object|embed|svg|math|template|noscript|textarea|select|button|input|img|video|audio|link|meta)$/.test(tg))return;
+      if(!TAG[tg]){walk(n,dst,depth+1);return}
+      var el=document.createElement(TAG[tg]),st=[],sd=n.style||{};
+      var col=nbColor(sd.color||(tg==='font'?n.getAttribute('color'):'')),bg=nbColor(sd.backgroundColor),fam=nbFontOf(sd.fontFamily||(tg==='font'?n.getAttribute('face'):'')),sz=nbSizeOf(sd.fontSize)||(tg==='font'?NB_SIZES[+n.getAttribute('size')]||0:0);
+      if(col&&(lum(col)<0.1||lum(col)>0.95))col='';
+      if(bg){st.push('background-color:'+bg);if(!col)col='#101c26'}
+      if(col)st.push('color:'+col);
+      if(fam)st.push('font-family:'+fam);
+      if(sz)st.push('font-size:'+sz+'px');
+      var fw=sd.fontWeight;if(fw==='bold'||+fw>=600)st.push('font-weight:700');
+      if(sd.fontStyle==='italic')st.push('font-style:italic');
+      var td=String(sd.textDecorationLine||sd.textDecoration||'');
+      if(/underline|line-through/.test(td))st.push('text-decoration:'+((/underline/.test(td)?'underline ':'')+(/line-through/.test(td)?'line-through':'')).trim());
+      if(st.length)el.setAttribute('style',st.join(';'));
+      walk(n,el,depth+1);dst.appendChild(el);
+    });
+  }
+  walk(doc.body,out,0);
+  return out.innerHTML;
+}
+function nbBodyHtml(n){return n.html?nbClean(n.html):esc(n.body||'').replace(/\r?\n/g,'<br>')}
+function nbToolbar(){
+  var sw=function(kind,c){return '<button type="button" class="sw" data-rt="'+kind+':'+c+'" style="background:'+c+'" title="'+(kind==='fore'?'Text colour':'Highlight')+'" aria-label="'+(kind==='fore'?'Text colour':'Highlight')+' '+c+'"></button>'};
+  var tc=['#d32f2f','#ef6c00','#2e7d32','#1565c0','#6a1b9a','#6d4c41'],hc=['#fff176','#a5d6a7','#90caf9','#f8bbd0','#ffcc80'];
+  return '<div class="rtbar" id="nbBar">'+
+  '<button type="button" data-rt="bold" title="Bold"><b>B</b></button><button type="button" data-rt="italic" title="Italic"><i>I</i></button><button type="button" data-rt="underline" title="Underline"><u>U</u></button><button type="button" data-rt="strikeThrough" title="Strikethrough"><s>S</s></button><span class="sep"></span>'+
+  '<select data-rtsel="font" aria-label="Font"><option value="">Font</option>'+Object.keys(NB_FONTS).map(function(k){return '<option value="'+esc(NB_FONTS[k])+'">'+k+'</option>'}).join('')+'</select>'+
+  '<select data-rtsel="size" aria-label="Text size"><option value="">Size</option><option value="2">Small</option><option value="3">Normal</option><option value="4">Large</option><option value="5">Larger</option><option value="6">Huge</option></select><span class="sep"></span>'+
+  '<label>Text</label>'+tc.map(function(c){return sw('fore',c)}).join('')+'<input type="color" data-rtinput="fore" value="#1565c0" aria-label="Custom text colour"><span class="sep"></span>'+
+  '<label>Highlight</label>'+hc.map(function(c){return sw('hilite',c)}).join('')+'<input type="color" data-rtinput="hilite" value="#fff176" aria-label="Custom highlight colour"><button type="button" data-rt="hilite:none" title="Remove highlight">No highlight</button><span class="sep"></span>'+
+  '<button type="button" data-rt="insertUnorderedList" title="Bullet list">• List</button><button type="button" data-rt="insertOrderedList" title="Numbered list">1. List</button><button type="button" data-rt="removeFormat" title="Clear formatting">Clear format</button></div>';
+}
+var nbRange=null;
+document.addEventListener('selectionchange',function(){var sl=window.getSelection(),b=$('#nbBody');if(b&&sl&&sl.rangeCount&&b.contains(sl.anchorNode))nbRange=sl.getRangeAt(0).cloneRange()});
+function nbExec(cmd,val){
+  var b=$('#nbBody');if(!b)return;
+  b.focus();if(nbRange){var sl=window.getSelection();sl.removeAllRanges();sl.addRange(nbRange)}
+  try{document.execCommand('styleWithCSS',false,true)}catch(e){}
+  if(cmd==='hilite'){if(val==='none'){document.execCommand('hiliteColor',false,'transparent')}else if(!document.execCommand('hiliteColor',false,val))document.execCommand('backColor',false,val)}
+  else if(cmd==='fore'){document.execCommand('foreColor',false,val)}
+  else document.execCommand(cmd,false,val==null?null:val);
+  nbSched();
+}
 function nbTablesHtml(n){return (n.tables||[]).map(function(t){return '<div style="margin:12px 0">'+tblBlock({ts:t.ts,table:t.table},'nbtables')+'</div>'}).join('')}
 function nbSetTables(arr){
   var id=nbShown;if(!id||!nbCol)return;
@@ -751,7 +821,7 @@ function nbEditor(){
   var n=notes.filter(function(x){return x.id===nbSel})[0];
   if(!n){m.innerHTML='<div class="empty"><h2>Notebook</h2>Click New note to start typing.</div>';nbShown=null;return}
   nbShown=n.id;
-  m.innerHTML='<input id="nbTitle" class="nbt" type="text" placeholder="Title (optional)" value="'+esc(n.title||'')+'" aria-label="Note title"><textarea id="nbBody" class="nbb" placeholder="Type anything here. You can also paste a table from Excel and it keeps its colours." aria-label="Note">'+esc(n.body||'')+'</textarea><div id="nbTables" data-sig=\''+esc(JSON.stringify(n.tables||[]))+'\'>'+nbTablesHtml(n)+'</div><div class="add"><button type="button" class="btn ghost" id="nbStamp">Insert date and time</button><button type="button" class="btn danger" id="nbDel">Delete note</button><span class="muted" id="nbMsg" style="align-self:center;font-size:12px">Saves automatically</span></div>';
+  m.innerHTML='<input id="nbTitle" class="nbt" type="text" placeholder="Title (optional)" value="'+esc(n.title||'')+'" aria-label="Note title">'+nbToolbar()+'<div id="nbBody" class="nbb nbrt" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Note" data-ph="Type anything here. Use the toolbar for colour and font. You can also paste a table from Excel.">'+nbBodyHtml(n)+'</div><div id="nbTables" data-sig=\''+esc(JSON.stringify(n.tables||[]))+'\'>'+nbTablesHtml(n)+'</div><div class="add"><button type="button" class="btn ghost" id="nbStamp">Insert date and time</button><button type="button" class="btn danger" id="nbDel">Delete note</button><span class="muted" id="nbMsg" style="align-self:center;font-size:12px">Saves automatically</span></div>';
 }
 function renderNotebook(){
   if(!nbSel&&notes.length)nbSel=nbSorted()[0].id;
@@ -764,7 +834,7 @@ function renderNotebook(){
 function nbSave(){
   nbTimer=null;var id=nbShown;if(!id||!nbCol)return;
   var t=$('#nbTitle'),b=$('#nbBody');if(!t||!b)return;
-  var d={title:t.value,body:b.value,updatedAt:Date.now()};
+  var d={title:t.value,body:(b.innerText||'').replace(/\u00a0/g,' ').replace(/\n{3,}/g,'\n\n').trim(),html:nbClean(b.innerHTML),updatedAt:Date.now()};
   write('nb-'+id,function(){return nbCol.doc(id).update(d)}).then(function(){var m=$('#nbMsg');if(m)m.textContent='Saved '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
 }
 function nbFlush(){if(nbTimer){clearTimeout(nbTimer);nbSave()}}
@@ -809,13 +879,15 @@ document.addEventListener('click',function(e){
   if(t.id==='trAdd'){trAddTask();return}
   if(t.id==='nbNew'){nbNew();return}
   var ns1=t.closest('[data-nbsel]');if(ns1){nbFlush();nbSel=ns1.dataset.nbsel;renderNotebook();return}
-  if(t.id==='nbStamp'){var nb1=$('#nbBody'),s1=stampOf(Date.now())+' - ';nb1.value=nb1.value.trim()?nb1.value.replace(/\s*$/,'')+'\n\n'+s1:s1;nb1.focus();nb1.setSelectionRange(nb1.value.length,nb1.value.length);nbSched();return}
+  if(t.id==='nbStamp'){var nb1=$('#nbBody');nb1.focus();var rg=document.createRange();rg.selectNodeContents(nb1);rg.collapse(false);var sg=window.getSelection();sg.removeAllRanges();sg.addRange(rg);document.execCommand('insertHTML',false,(nb1.textContent.trim()?'<br><br>':'')+esc(stampOf(Date.now()))+' - ');nbSched();return}
   if(t.id==='nbDel'){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}var nid=nbShown;nbSel=null;nbShown=null;write('nb-'+nid,function(){return nbCol.doc(nid).delete()}).then(function(){toast('Note deleted')});return}
   if(t.closest('[data-close]')){closeDrawer();return}
   if(t.id==='saveBtn'){saveCase();return}
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
+  var rtb=t.closest&&t.closest('[data-rt]');
+  if(rtb){var rv=rtb.getAttribute('data-rt'),ix=rv.indexOf(':');if(ix>0)nbExec(rv.slice(0,ix),rv.slice(ix+1));else nbExec(rv);return}
   var tke=t.closest&&t.closest('[data-tkedit]');
   if(tke){editTk=tke.getAttribute('data-tkedit');rerenderTasks();setTimeout(function(){var x=document.querySelector('[data-tkf=text]');if(x)x.focus()},50);return}
   if(t.closest&&t.closest('[data-tkecancel]')){editTk=null;try{document.activeElement.blur()}catch(e){}rerenderTasks();return}
@@ -888,6 +960,8 @@ document.addEventListener('click',function(e){
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.matches('[data-trk]')){var f2=trFind(t.dataset.trk);if(f2)trSet(f2,{done:t.checked});return}
+  if(t.matches('[data-rtsel]')){if(t.value){nbExec(t.getAttribute('data-rtsel')==='font'?'fontName':'fontSize',t.value)}t.selectedIndex=0;return}
+  if(t.matches('[data-rtinput]')){nbExec(t.getAttribute('data-rtinput'),t.value);return}
   if(t.matches('[data-trt]')){var f4=trFind(t.dataset.trt);if(f4)trSet(f4,t.value&&!f4.t.due?{time:t.value,due:iso(TODAY)}:{time:t.value});return}
   if(t.matches('[data-trd]')){var f3=trFind(t.dataset.trd);if(f3)trSet(f3,{due:t.value});return}
   if(t.matches('[data-tk]')){
@@ -1047,16 +1121,18 @@ function autoSave(){
   patch(openId,data).then(function(){var m=$('#autoMsg');if(m)m.textContent='Auto-saved '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
 }
 setInterval(autoSave,5000);
+document.addEventListener('mousedown',function(e){var t=e.target;if(t&&t.closest&&t.closest('#nbBar')&&!t.closest('select')&&!t.closest('input'))e.preventDefault()},true);
+document.addEventListener('drop',function(e){var t=e.target;if(t&&t.closest&&t.closest('#nbBody')){e.preventDefault();var tx=(e.dataTransfer&&e.dataTransfer.getData('text/plain'))||'';if(tx)document.execCommand('insertText',false,tx)}},true);
 document.addEventListener('paste',function(e){
   var t=e.target;
   if(t&&t.closest&&t.closest('table.nt.xl')){e.preventDefault();var tx=(e.clipboardData&&e.clipboardData.getData('text/plain')||'').replace(/\s+/g,' ');document.execCommand('insertText',false,tx);return}
-  if(t&&t.id==='nbBody'){
+  if(t&&t.closest&&t.closest('#nbBody')){
     var h2=e.clipboardData&&e.clipboardData.getData('text/html');
-    if(!h2||!/<table/i.test(h2))return;
-    var pl2=e.clipboardData.getData('text/plain'),a0=t.selectionStart,a1=t.selectionEnd;
+    var pl2=(e.clipboardData&&e.clipboardData.getData('text/plain'))||'';
     e.preventDefault();
+    if(!h2||!/<table/i.test(h2)){document.execCommand('insertText',false,pl2);return}
     parseTable(h2,function(tb){
-      if(!tb){t.setRangeText(pl2,a0,a1,'end');nbSched();return}
+      if(!tb){document.execCommand('insertText',false,pl2);return}
       var nn2=notes.filter(function(x){return x.id===nbShown})[0];if(!nn2)return;
       nbSetTables((nn2.tables||[]).concat([{ts:Date.now(),table:{rows:tb.rows}}]));
       toast(tb.cut?'Table added. Only the first 200 rows and 30 columns were kept':'Table added to this note');
