@@ -258,9 +258,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 12:01";</script>
-<script src="config.js?v=202611051201"></script>
-<script src="sync.js?v=202611051201"></script>
+<script>window.MD_BUILD="2026-11-05 12:13";</script>
+<script src="config.js?v=202611051213"></script>
+<script src="sync.js?v=202611051213"></script>
 <script>
 (function(){
 'use strict';
@@ -601,7 +601,7 @@ function openDrawer(id,draft){
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
-  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><h2 id="dTitle">'+esc(id?names(c):'Add a client')+'</h2>'+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
+  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2>'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+'</div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+money(c.monthlyPayment)+'</b><span>Monthly</span></div><div><b>'+(c.fixedUntil?fd(c.fixedUntil):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div><div><b>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'—')+'</b><span>Mortgage expiry</span></div></div></div>'+
   '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
@@ -683,11 +683,18 @@ function apHTML(){
   h+='<div class="aphead" style="margin-top:16px"><h2 style="font-size:15px">Coming up</h2></div>'+(up.length?up.map(function(a){return apCard(a,true)}).join(''):'<div class="muted">No upcoming appointments.</div>');
   return h+'</div></div>';
 }
+function apNextHtml(cid){
+  var nowMin=new Date().getHours()*60+new Date().getMinutes(),t=iso(TODAY);
+  var up=apSorted(appts.filter(function(a){return a.caseId===cid&&(a.status||'booked')==='booked'&&(a.date>t||(a.date===t&&apMin(a.time)+(+a.dur||30)>=nowMin))}));
+  if(!up.length)return '';
+  var a=up[0];return 'Next appointment: <b>'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', '+esc(a.time)+'</b>'+(a.mode?' · '+esc(a.mode):'')+(up.length>1?' · +'+(up.length-1)+' more':'');
+}
 function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false}
-function apOpen(id,date){
+function apOpen(id,date,preCase){
   var a=id?appts.filter(function(x){return x.id===id})[0]:null;if(id&&!a)return;
   apEditId=a?a.id:null;apClash=false;
   var c=a&&apCase(a),who=a?(c?apLabel(c):(a.who||'')):'';
+  if(!a&&preCase){var pc=cases.filter(function(x){return x.id===preCase})[0];if(pc)who=apLabel(pc)}
   var opt=function(list,sel){return list.map(function(v){return '<option'+(v===sel?' selected':'')+'>'+esc(v)+'</option>'}).join('')};
   var o=$('#apOv');if(!o){o=document.createElement('div');o.id='apOv';document.body.appendChild(o)}
   o.innerHTML='<div class="apm" role="dialog" aria-label="Appointment"><h2>'+(a?'Edit appointment':'Book appointment')+'</h2><div class="apf">'+
@@ -1090,6 +1097,7 @@ document.addEventListener('click',function(e){
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
   if(t.id==='apOv'){apClose();return}
+  if(t.id==='bookBtn'){apOpen(null,iso(TODAY),openId);return}
   var bdf=t.closest&&t.closest('[data-bdf]');if(bdf){bdFilter=bdf.getAttribute('data-bdf');bdRender();return}
   if(t.closest&&t.closest('[data-bdgo]')){view='birthdays';bdFilter='week';render();return}
   var bdo=t.closest&&t.closest('[data-bdopen]');
@@ -1421,7 +1429,7 @@ claude.use('db').then(function(d){
   col=db.collection('cases');
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
-  apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();renderNav()},function(){});
+  apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
   nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};notes=all.filter(function(x){return x.id!=='bday-template'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){
     cases=snap.docs.map(function(x){return Object.assign({id:x.id},x.data())});
