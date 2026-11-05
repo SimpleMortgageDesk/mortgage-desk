@@ -258,9 +258,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 11:29";</script>
-<script src="config.js?v=202611051129"></script>
-<script src="sync.js?v=202611051129"></script>
+<script>window.MD_BUILD="2026-11-05 12:01";</script>
+<script src="config.js?v=202611051201"></script>
+<script src="sync.js?v=202611051201"></script>
 <script>
 (function(){
 'use strict';
@@ -464,7 +464,7 @@ function visible(){
 
 /* ---------- render shell ---------- */
 function renderNav(){updTrayBtn();
-  var items=[['tasks','Tasks'],['appointments','Appointments'],['birthdays','Birthdays'],['pipeline','Pipeline'],['cases','All cases'],['reminders','Reminders'],['notebook','Notebook']];
+  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['appointments','Appointments'],['notebook','Notebook'],['birthdays','Birthdays']];
   var dc=dueCount(),tdc=allTasks().filter(function(x){return trBucket(x)==='over'}).length;
   $('#nav').innerHTML=items.map(function(i){
     return '<button data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='reminders'&&dc?'<span class="badge">'+dc+' overdue</span>':'')+(i[0]==='tasks'&&tdc?'<span class="badge">'+tdc+' overdue</span>':'')+(i[0]==='birthdays'&&bdCounts(bdPeople().list).today?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bdCounts(bdPeople().list).today+' today</span>':'')+(i[0]==='appointments'&&apTodayN()?'<span class="badge" style="background:var(--accent-soft,#dbe9f8);color:var(--accent)">'+apTodayN()+' today</span>':'')+'</button>';
