@@ -210,9 +210,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-04 18:05";</script>
-<script src="config.js?v=202611041805"></script>
-<script src="sync.js?v=202611041805"></script>
+<script>window.MD_BUILD="2026-11-05 09:09";</script>
+<script src="config.js?v=202611050909"></script>
+<script src="sync.js?v=202611050909"></script>
 <script>
 (function(){
 'use strict';
@@ -245,7 +245,7 @@ function protFs(c){
   var ps=(c.protection||[]).slice().sort(function(a,b){return b.ts-a.ts});
   return '<fieldset style="margin-top:14px"><legend>Protection ('+ps.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="prHide">'+(protHidden?'Show protection':'Hide protection')+'</button></div>'+
   (protHidden?'<span class="muted">Protection notes hidden.</span>':'<label class="f">New protection note<textarea id="prText" rows="3" placeholder="Life cover, critical illness, income protection, buildings and contents: provider, cover, premium, review date">'+esc(prDraft)+'</textarea></label><div id="prTblBox">'+pendHtml('pr')+'</div><div class="add"><button type="button" class="btn ghost" id="prStamp">Insert date and time</button><button type="button" class="btn ghost" id="prAdd">Add note</button></div>'+
-  (protAll?ps:ps.slice(0,1)).map(function(n){return '<div class="note"><small>'+stampOf(n.ts)+(protAll||ps.length<2?'':' (latest)')+'</small>'+esc(n.text)+tblBlock(n,'protection')+'</div>'}).join('')+
+  (protAll?ps:ps.slice(0,1)).map(function(n){return noteItem(n,'protection',(protAll||ps.length<2?'':' (latest)'),esc)}).join('')+
   (ps.length>1?'<button type="button" class="btn ghost sm" id="prAll">'+(protAll?'Show latest only':'Show all '+ps.length+' protection notes')+'</button>':''))+'</fieldset>';
 }
 function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function(a,b){return b.ts-a.ts})[0];if(!n)return '<span class="muted">—</span>';var t=String(n.text||'');if(!t&&n.table)t='[Table]';if(t.length>110)t=t.slice(0,110)+'…';return '<div class="muted" style="font-family:var(--mono);font-size:11px">'+stampOf(n.ts)+'</div>'+esc(t)}
@@ -544,7 +544,7 @@ function startFrom(src){
   closeDrawer();openDrawer(null,d);
 }
 function openDrawer(id,draft){
-  openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
+  openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
   var c=id?cases.filter(function(x){return x.id===id})[0]:null;
   if(id&&!c){openId=undefined;return}
   c=c||Object.assign({stage:'enquiry',type:'Purchase',repayment:'repayment',applicants:[{}]},draft||{});
@@ -588,9 +588,17 @@ function openDrawer(id,draft){
   lastAuto=id?JSON.stringify(collectForm()):null;
   newBase=id?null:JSON.stringify(collectForm());
 }
-function closeDrawer(){var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null;newBase=null;ntTable=null;prTable=null}
+function closeDrawer(){editNote=null;var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null;newBase=null;ntTable=null;prTable=null}
 function currentCase(){return openId?cases.filter(function(x){return x.id===openId})[0]:null}
 
+function shortStamp(ts){return new Date(ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+var editNote=null;
+function noteItem(n,list,suffix,fmt){
+  var head=stampOf(n.ts)+suffix+(n.edited?' · edited '+shortStamp(n.edited):'');
+  if(editNote&&editNote.list===list&&editNote.ts===n.ts)
+    return '<div class="note"><small>'+head+'</small><textarea id="ntEdit" class="nbb" style="min-height:140px" aria-label="Edit note">'+esc(n.text||'')+'</textarea><div class="add"><button type="button" class="btn" id="ntEditSave">Save changes</button><button type="button" class="btn ghost" id="ntEditCancel">Cancel</button></div>'+tblBlock(n,list)+'</div>';
+  return '<div class="note"><small>'+head+' <button type="button" class="btn ghost sm" data-nedit="'+list+'|'+n.ts+'" style="margin-left:8px">Edit</button></small>'+fmt(n.text)+tblBlock(n,list)+'</div>';
+}
 function renderLive(){
   var box=$('#live');if(!box)return;
   if(!openId){var nb0=$('#liveNotes');if(nb0)nb0.innerHTML='';box.innerHTML='<fieldset><legend>Tasks and notes</legend><span class="muted">Save the case first, then add tasks and file notes here.</span></fieldset>';return}
@@ -598,12 +606,12 @@ function renderLive(){
   var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||((a.due||'9999')<(b.due||'9999')?-1:1)});
   var ns=(c.notes||[]).slice().sort(function(a,b){return b.ts-a.ts});
   var tasksHtml='<fieldset><legend>Tasks</legend>'+
-    (ts.length?ts.map(function(t){return '<div class="task'+(t.done?' done':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+'</span>':'')+'<button type="button" class="x" data-rmtk="'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
+    (ts.length?ts.map(function(t){return '<div class="task'+(t.done?' done':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+'</span>':'')+'<button type="button" class="x" data-rmtk="'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
     '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
     (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
-    (notesAll?ns:ns.slice(0,1)).map(function(n){return '<div class="note"><small>'+stampOf(n.ts)+(notesAll||ns.length<2?'':' (latest)')+'</small>'+paras(n.text)+tblBlock(n,'notes')+'</div>'}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset><div style="margin-top:14px">'+tasksHtml+'</div>';
+    (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset><div style="margin-top:14px">'+tasksHtml+'</div>';
 }
 var secHidden={};
 try{secHidden=JSON.parse(localStorage.getItem('secHidden')||'{}')||{}}catch(e){secHidden={}}
@@ -661,7 +669,7 @@ function updTrayBtn(){var b=$('#trayBtn');if(!b)return;var od=allTasks().filter(
 var TR_LABEL={over:'Overdue',today:'Due today',week:'Next 7 days',later:'Later',none:'No due date',done:'Done'};
 function trItem(x){
   var c=x.c,t=x.t,b=trBucket(x),k=c.id+'|'+t.id;
-  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+esc(t.text)+'</div><div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
+  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
 }
 function renderTray(){
   var box=$('#trList');if(!box)return;
@@ -681,7 +689,7 @@ function renderTray(){
       if(trFilter==='none'&&b!=='none')return false}
     if(q&&(x.t.text+' '+names(x.c)+' '+(x.c.clientNo||'')).toLowerCase().indexOf(q)<0)return false;
     return true});
-  items.sort(function(a,b){var da=a.t.due||'9999-99',db2=b.t.due||'9999-99';return da<db2?-1:da>db2?1:cnum(a.c)-cnum(b.c)});
+  items.sort(function(a,b){var da=a.t.due||'9999-99',db2=b.t.due||'9999-99';return da<db2?-1:da>db2?1:((a.t.created||0)-(b.t.created||0))||(cnum(a.c)-cnum(b.c))});
   if(!items.length){box.innerHTML='<div class="empty">Nothing here.</div>';return}
   var order=['over','today','week','later','none','done'],h='';
   order.forEach(function(g){
@@ -708,7 +716,7 @@ function trAddTask(){
   var no=cv.split(' · ')[0].trim().toUpperCase();
   var c=cases.filter(function(x){return (x.clientNo||'').toUpperCase()===no})[0];
   if(!c){toast('Pick a client from the list');return}
-  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',done:false}])});
+  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',done:false,created:Date.now()}])});
   $('#trNewText').value='';$('#trNewDue').value='';toast('Task added to '+names(c));
 }
 
@@ -802,6 +810,17 @@ document.addEventListener('click',function(e){
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
+  var ne=t.closest&&t.closest('[data-nedit]');
+  if(ne){var pp=ne.getAttribute('data-nedit').split('|');editNote={list:pp[0],ts:+pp[1]};renderLive();setTimeout(function(){var x=$('#ntEdit');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},50);return}
+  if(t.id==='ntEditCancel'){editNote=null;renderLive();return}
+  if(t.id==='ntEditSave'){
+    var ex=$('#ntEdit'),cc=currentCase();if(!ex||!editNote||!cc)return;
+    var en=editNote,val=ex.value.trim(),arr0=cc[en.list]||[],cur=arr0.filter(function(x){return x.ts===en.ts})[0];if(!cur)return;
+    if(!val&&!cur.table){toast('A note cannot be empty');return}
+    editNote=null;
+    if(val===String(cur.text||'').trim()){renderLive();return}
+    var narr=arr0.map(function(x){return x.ts===en.ts?Object.assign({},x,{text:val,edited:Date.now()}):x}),oo={};oo[en.list]=narr;patch(openId,oo);toast('Note updated');return;
+  }
   var tbb=t.closest&&t.closest('[data-tb]');
   if(tbb){
     var act=tbb.getAttribute('data-tb');
@@ -823,7 +842,7 @@ document.addEventListener('click',function(e){
   }
   if(t.id==='tkAdd'){
     var tx=$('#tkText').value.trim();if(!tx)return;
-    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||'',done:false}]);
+    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||'',done:false,created:Date.now()}]);
     patch(openId,{tasks:arr});return;
   }
   var rt=t.closest('[data-rmtk]');
@@ -1068,7 +1087,7 @@ claude.use('db').then(function(d){
     var typing=ae&&(ae.id==='q');
     render();if(trayOpen)renderTray();
     if(typing){var q=$('#q');q.focus&&q.focus()}
-    if(openId){var ae2=document.activeElement;if(!(ae2&&(/^(ntText|prText|tkText)$/.test(ae2.id||'')||(ae2.closest&&ae2.closest('table.nt.xl')))))renderLive()}
+    if(openId){var ae2=document.activeElement;if(!(ae2&&(/^(ntText|prText|tkText|ntEdit)$/.test(ae2.id||'')||(ae2.closest&&ae2.closest('table.nt.xl')))))renderLive()}
   },function(){loaded=true;db=null;render();toast('Lost connection to your saved cases')});
 });
 })();
