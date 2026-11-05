@@ -8,7 +8,7 @@
   var GRAPH = 'https://graph.microsoft.com/v1.0';
   var ROOT = 'Apps / Mortgage Desk';
   var APP = '/me/drive/special/approot';
-  var COLS = ['cases', 'notebook'];
+  var COLS = ['cases', 'notebook', 'appointments'];
   var REDIRECT = CFG.redirectUri || (location.origin + location.pathname.replace(/[^\/]*$/, ''));
   var $ = function (i) { return document.getElementById(i); };
   var enc = function (p) { return p.split('/').map(encodeURIComponent).join('/'); };
@@ -90,7 +90,7 @@
   function idbDel(store, k) { if (!idb) return; try { idb.transaction(store, 'readwrite').objectStore(store).delete(k); } catch (e) {} }
   function idbClearAll() { return new Promise(function (res) { if (!idb) return res(); try { var t = idb.transaction(['docs', 'dirty'], 'readwrite'); t.objectStore('docs').clear(); t.objectStore('dirty').clear(); t.oncomplete = res; t.onerror = res; } catch (e) { res(); } }); }
 
-  var mem = { cases: {}, notebook: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [] };
+  var mem = { cases: {}, notebook: {}, appointments: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [], appointments: [] };
   function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); }
   function snap(col) { return { docs: Object.keys(mem[col]).map(function (id) { var d = mem[col][id].data; return { id: id, data: function () { return clone(d); } }; }) }; }
   function notify(col) { subs[col].forEach(function (cb) { try { cb(snap(col)); } catch (e) { console.error(e); } }); }
