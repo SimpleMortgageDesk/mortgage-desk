@@ -194,6 +194,7 @@ table.nt th{font-weight:600;background:var(--surface2)}
 .bdh{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
 .bdc textarea{width:100%;margin-top:8px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;font:inherit;font-size:14px;line-height:1.45;resize:vertical}
 .bdban{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--line);border-left:4px solid #d81b60;border-radius:8px;background:var(--surface);padding:8px 12px;margin:0 0 12px}
+.bdok{color:#2e7d32;font-weight:600;font-size:12px;margin-left:8px}.bdchk{display:flex;align-items:center;gap:6px;padding:0 8px;font-size:14px}.bdchk input{width:18px;height:18px;accent-color:#2e7d32}
 .bdwa{background:#1faa59;border-color:#1faa59;color:#fff}
 .apwrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
 @media (max-width:980px){.apwrap{grid-template-columns:1fr}}
@@ -257,9 +258,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 11:14";</script>
-<script src="config.js?v=202611051114"></script>
-<script src="sync.js?v=202611051114"></script>
+<script>window.MD_BUILD="2026-11-05 11:29";</script>
+<script src="config.js?v=202611051129"></script>
+<script src="sync.js?v=202611051129"></script>
 <script>
 (function(){
 'use strict';
@@ -712,9 +713,14 @@ function apSave(){
   var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');setTimeout(function(){if(view==='appointments')render();renderNav()},30);
 }
 /* ---------- birthdays ---------- */
-var bdFilter='week',bdQuery='',bdOpen={},bdDraft={},bdTpl='',bdTplOpen=false;
-var BD_DEFAULT='Happy Birthday {name}! 🎂🎉\n\nWishing you a wonderful day filled with joy, laughter and all your favourite things. May the year ahead bring you good health, happiness and lots of lovely surprises.\n\nWarmest wishes,\nAtik Raza\nMortgage and Protection Adviser';
-function bdTemplate(){return bdTpl||BD_DEFAULT}
+var bdFilter='week',bdQuery='',bdOpen={},bdDraft={},bdTplOpen=false;
+var BD_MSGS=['Happy Birthday {name}! 🎂🎉 Wishing you a wonderful day filled with joy, laughter and all your favourite things. May the year ahead bring you good health, happiness and lots of lovely surprises.','Dear {name}, wishing you a very happy birthday! 🎈 I hope today is full of smiles, good company and a little bit of cake. Here\'s to a fantastic year ahead!','Happy Birthday {name}! 🥳 Thinking of you today and hoping you have a lovely, relaxing day with the people who matter most to you.','Many happy returns, {name}! 🎁 May your day be as special as you are, and may the coming year bring you everything you wish for.','Hi {name}, just a quick note to wish you a very happy birthday! 🌟 I hope you\'re spoiled rotten today. Enjoy every moment!','Happy Birthday {name}! 🎂 Wishing you health, happiness and success in the year ahead. Have a truly wonderful day!','Warmest birthday wishes to you, {name}! 🌸 May this new year of life bring you peace, prosperity and plenty of reasons to celebrate.','Happy Birthday {name}! 🎉 Hope your day is packed with good food, good company and lots of laughter. You deserve it!','Hello {name}, sending you my very best wishes on your birthday! 💐 May it be the start of a brilliant year for you and your family.','Happy Birthday {name}! 🥂 Here\'s to another great year. Wishing you a day full of love, laughter and wonderful surprises.','Wishing you a fantastic birthday, {name}! 🎈 Take time to enjoy today. You deserve a day that\'s all about you!','Happy Birthday {name}! ☀️ I hope today brings you plenty of joy and that the year ahead is your best yet.','Dear {name}, happy birthday! 🎂 Thank you for being a valued client. Wishing you a wonderful day and a happy, healthy year ahead.','Happy Birthday {name}! 🌹 May your day be filled with love and your year with happy moments. Enjoy every minute!','Wishing you the happiest of birthdays, {name}! 🎊 May all your wishes come true today and throughout the year ahead.'];
+var BD_SIG='Warmest wishes,\nAtik Raza\nMortgage and Protection Adviser';
+var bdCfg={messages:null,signature:null},bdShuf={};
+function bdMsgs(){return (bdCfg.messages&&bdCfg.messages.length)?bdCfg.messages:BD_MSGS}
+function bdSig(){return bdCfg.signature!=null?bdCfg.signature:BD_SIG}
+function bdHash(t){var h=0;for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;return h}
+function bdPick(p){var l=bdMsgs();return bdHash(p.slug+'|'+p.year+'|'+(bdShuf[p.key]||0))%l.length}
 function bdFirst(nm){var t=String(nm||'').trim().split(/\s+/).filter(Boolean);while(t.length>1&&/^(mr|mrs|miss|ms|dr|md|mohd)\.?$/i.test(t[0]))t.shift();var f=t[0]||'';return f.charAt(0).toUpperCase()+f.slice(1).toLowerCase()}
 function bdSlug(nm){return String(nm||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
 function bdIntl(ph){var d=String(ph||'').replace(/[^\d+]/g,'');if(d.replace(/\D/g,'').length<7)return '';return d.charAt(0)==='+'?d.slice(1):d.charAt(0)==='0'?'44'+d.slice(1):d}
@@ -743,24 +749,26 @@ function bdPeople(){
   return {list:list,missing:missing};
 }
 function bdCounts(list){var c={today:0,week:0,month:0,all:list.length};list.forEach(function(p){if(p.sent)return;if(p.days===0)c.today++;if(p.days<=7)c.week++;if(p.days<=30)c.month++});return c}
-function bdMessage(p){return bdDraft[p.key]!=null?bdDraft[p.key]:bdTemplate().replace(/\{name\}/g,bdFirst(p.name))}
+function bdMessage(p){if(bdDraft[p.key]!=null)return bdDraft[p.key];var t=bdMsgs()[bdPick(p)].replace(/\{name\}/g,bdFirst(p.name)),sg=bdSig().trim();return sg?t+'\n\n'+sg:t}
 function bdShell(){
   return '<div class="pagehead"><h1>Birthdays</h1><span class="muted">Send a birthday message with one click</span></div><div id="bdTplBox"></div><div class="filters" style="margin:10px 0"><input type="search" id="bdQ" class="search" style="width:100%" placeholder="Search by name" aria-label="Search birthdays" value="'+esc(bdQuery)+'"></div><div id="bdChips" class="chips" style="margin:10px 0"></div><div id="bdList"></div>';
 }
 function bdTplRender(){
   var b=$('#bdTplBox');if(!b)return;
-  b.innerHTML=bdTplOpen?'<div class="bdc" style="border-left-color:var(--accent)"><b>Birthday message template</b><div class="muted" style="font-size:12px;margin-top:2px">Write {name} where the first name should go. You can still change each message before you send it.</div><textarea id="bdTplText" rows="8">'+esc(bdTemplate())+'</textarea><div class="add" style="margin-top:8px"><button type="button" class="btn" id="bdTplSave">Save template</button><button type="button" class="btn ghost" id="bdTplReset">Reset to default</button><button type="button" class="btn ghost" id="bdTplBtn">Close</button></div></div>':'<button type="button" class="btn ghost sm" id="bdTplBtn">Edit message template</button>';
+  b.innerHTML=bdTplOpen?'<div class="bdc" style="border-left-color:var(--accent)"><b>Birthday messages</b><div class="muted" style="font-size:12px;margin:2px 0 6px">'+bdMsgs().length+' messages. Each client is given one of them automatically. Write {name} where the first name goes, and put a line with --- between messages.</div><textarea id="bdMsgsText" rows="14">'+esc(bdMsgs().join('\n---\n'))+'</textarea><div class="muted" style="font-size:12px;margin:8px 0 2px">Signature, added at the end of every message</div><textarea id="bdSigText" rows="3">'+esc(bdSig())+'</textarea><div class="add" style="margin-top:8px"><button type="button" class="btn" id="bdTplSave">Save</button><button type="button" class="btn ghost" id="bdTplReset">Reset to the 15 standard messages</button><button type="button" class="btn ghost" id="bdTplBtn">Close</button></div></div>':'<button type="button" class="btn ghost sm" id="bdTplBtn">Edit messages and signature</button>';
 }
+function bdDobText(p){var y=+p.dob.slice(0,4),d=new Date(y,+p.dob.slice(5,7)-1,+p.dob.slice(8,10));return d.toLocaleDateString('en-GB',y>=1900&&y<=TODAY.getFullYear()?{day:'numeric',month:'short',year:'numeric'}:{day:'numeric',month:'short'})}
+function bdSentAt(p){var t=0;p.cases.forEach(function(c){if(c.bdaySent&&c.bdaySent[p.slug]===p.year&&c.bdaySentAt&&c.bdaySentAt[p.slug]>t)t=c.bdaySentAt[p.slug]});return t}
 function bdItem(p){
   var intl=bdIntl(p.phone),open=bdOpen[p.key]!==undefined?bdOpen[p.key]:p.days<=7;
   var when=p.days===0?'Today':p.days===1?'Tomorrow':p.next.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   var meta=[when+(p.days>1?' · in '+p.days+' days':''),(p.age>=16&&p.age<=110?'turns '+p.age:''),p.phone?esc(p.phone):'no phone number'].filter(Boolean).join(' · ');
-  var c0=p.cases.slice().sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0)})[0];
-  var h='<div class="bdc'+(p.sent?' sent':'')+'" data-bdkey="'+esc(p.key)+'"><div class="bdh"><div><b>'+esc(p.name)+'</b>'+(p.sent?' <span class="apst">Sent ✓</span>':'')+'</div><div class="muted" style="font-size:12px">'+meta+' · <button type="button" class="lnk" data-open="'+c0.id+'">'+(c0.clientNo?esc(c0.clientNo):'open case')+'</button></div></div>';
-  if(!open)return h+'<div class="add" style="margin-top:6px"><button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Write message</button></div></div>';
+  var c0=p.cases.slice().sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0)})[0],sa=p.sent?bdSentAt(p):0;
+  var h='<div class="bdc'+(p.sent?' sent':'')+'" data-bdkey="'+esc(p.key)+'"><div class="bdh"><div><b>'+esc(p.name)+'</b> <span class="muted" style="font-size:13px">🎂 '+esc(bdDobText(p))+'</span>'+(p.sent?'<span class="bdok">✓ Sent'+(sa?' '+shortStamp(sa):'')+'</span>':'')+'</div><div class="muted" style="font-size:12px">'+meta+' · <button type="button" class="lnk" data-open="'+c0.id+'">'+(c0.clientNo?esc(c0.clientNo):'open case')+'</button></div></div>';
+  if(!open)return h+'<div class="add" style="margin-top:6px"><button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Write message</button><label class="bdchk"><input type="checkbox" data-bdchk="'+esc(p.key)+'"'+(p.sent?' checked':'')+'> Sent</label></div></div>';
   return h+'<textarea data-bdmsg="'+esc(p.key)+'" rows="7" aria-label="Birthday message for '+esc(p.name)+'">'+esc(bdMessage(p))+'</textarea><div class="add" style="margin-top:6px">'+
     (intl?'<button type="button" class="btn bdwa" data-bdsend="'+esc(p.key)+'">Send on WhatsApp</button>':'<span class="muted" style="align-self:center;font-size:12px">Add a phone number to the case to send on WhatsApp.</span>')+
-    '<button type="button" class="btn ghost" data-bdcopy="'+esc(p.key)+'">Copy message</button><button type="button" class="btn ghost" data-bdsent="'+esc(p.key)+'">'+(p.sent?'Undo sent':'Mark as sent')+'</button>'+(bdOpen[p.key]!==undefined&&p.days>7?'<button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Hide</button>':'')+'</div></div>';
+    '<button type="button" class="btn ghost" data-bdshuf="'+esc(p.key)+'" title="Pick a different message">Another message</button><button type="button" class="btn ghost" data-bdcopy="'+esc(p.key)+'">Copy message</button><label class="bdchk"><input type="checkbox" data-bdchk="'+esc(p.key)+'"'+(p.sent?' checked':'')+'> Sent</label>'+(bdOpen[p.key]!==undefined&&p.days>7?'<button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Hide</button>':'')+'</div></div>';
 }
 function bdRender(){
   var box=$('#bdList');if(!box)return;
@@ -783,9 +791,14 @@ function bdRender(){
 function bdFind(key){return bdPeople().list.filter(function(p){return p.key===key})[0]}
 function bdText(p){var ta=document.querySelector('[data-bdmsg="'+(window.CSS&&CSS.escape?CSS.escape(p.key):p.key)+'"]');return ta?ta.value:bdMessage(p)}
 function bdSetSent(p,on){
-  var tasks=[];
-  p.cases.forEach(function(c){var o=Object.assign({},c.bdaySent||{});if(on){if(c!==p.cases[0])return;o[p.slug]=p.year}else{if(o[p.slug]!==p.year)return;delete o[p.slug]}tasks.push([c,o])});
-  tasks.forEach(function(t){patch(t[0].id,{bdaySent:t[1]})});
+  var jobs=[];
+  p.cases.forEach(function(c){
+    var o=Object.assign({},c.bdaySent||{}),at=Object.assign({},c.bdaySentAt||{});
+    if(on){if(c!==p.cases[0])return;o[p.slug]=p.year;at[p.slug]=Date.now()}
+    else{if(o[p.slug]!==p.year)return;delete o[p.slug];delete at[p.slug]}
+    jobs.push([c,{bdaySent:o,bdaySentAt:at}]);
+  });
+  jobs.forEach(function(j){patch(j[0].id,j[1])});
 }
 function bdBanner(){
   var b=$('#bdBanner');if(!b)return;
@@ -1089,11 +1102,18 @@ document.addEventListener('click',function(e){
     var done=function(){toast('Message copied')};
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(ctx).then(done,function(){toast('Could not copy. Select the text and copy it.')});else{var ta0=document.querySelector('[data-bdmsg]');if(ta0){ta0.select();try{document.execCommand('copy');done()}catch(x){}}}
     return}
-  var bdn=t.closest&&t.closest('[data-bdsent]');
-  if(bdn){var np=bdFind(bdn.getAttribute('data-bdsent'));if(np)bdSetSent(np,!np.sent);return}
+  var bdh=t.closest&&t.closest('[data-bdshuf]');
+  if(bdh){var hp=bdFind(bdh.getAttribute('data-bdshuf'));if(hp){var n0=bdMsgs().length,cur0=bdPick(hp),tries=0;do{bdShuf[hp.key]=(bdShuf[hp.key]||0)+1;tries++}while(n0>1&&bdPick(hp)===cur0&&tries<30);delete bdDraft[hp.key];bdRender()}return}
   if(t.id==='bdTplBtn'){bdTplOpen=!bdTplOpen;bdTplRender();return}
-  if(t.id==='bdTplSave'){var tv=$('#bdTplText').value.trim();if(!tv)return;if(tv.indexOf('{name}')<0&&!confirm('Your template has no {name}, so every message will be identical. Save anyway?'))return;bdTpl=tv===BD_DEFAULT?'':tv;bdDraft={};write('nb-bday-template',function(){return tv===BD_DEFAULT?nbCol.doc('bday-template').delete():nbCol.doc('bday-template').set({text:tv,updatedAt:Date.now()})});bdTplOpen=false;bdTplRender();bdRender();toast('Template saved');return}
-  if(t.id==='bdTplReset'){bdTpl='';bdDraft={};write('nb-bday-template',function(){return nbCol.doc('bday-template').delete()});bdTplRender();bdRender();toast('Template reset');return}
+  if(t.id==='bdTplSave'){
+    var ms=$('#bdMsgsText').value.split(/\n-{3,}\s*\n/).map(function(x){return x.trim()}).filter(Boolean),sg=$('#bdSigText').value.trim();
+    if(!ms.length){toast('Write at least one message');return}
+    if(!ms.some(function(x){return x.indexOf('{name}')>-1})&&!confirm('None of your messages has {name}, so the first name will not be added. Save anyway?'))return;
+    var same=JSON.stringify(ms)===JSON.stringify(BD_MSGS)&&sg===BD_SIG.trim();
+    bdCfg=same?{messages:null,signature:null}:{messages:ms,signature:sg};bdDraft={};bdShuf={};
+    write('nb-bday-template',function(){return same?nbCol.doc('bday-template').delete():nbCol.doc('bday-template').set({messages:ms,signature:sg,updatedAt:Date.now()})});
+    bdTplOpen=false;bdTplRender();bdRender();toast('Saved');return}
+  if(t.id==='bdTplReset'){bdCfg={messages:null,signature:null};bdShuf={};bdDraft={};write('nb-bday-template',function(){return nbCol.doc('bday-template').delete()});bdTplRender();bdRender();toast('Template reset');return}
   var apd=t.closest&&t.closest('[data-apday]');
   if(apd){apSel=apd.getAttribute('data-apday');var pq=apSel.split('-');apMonth={y:+pq[0],m:+pq[1]-1};render();return}
   var apm=t.closest&&t.closest('[data-apmonth]');
@@ -1179,6 +1199,7 @@ document.addEventListener('click',function(e){
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.matches('[data-trk]')){var f2=trFind(t.dataset.trk);if(f2)trSet(f2,{done:t.checked});return}
+  if(t.matches('[data-bdchk]')){var cp2=bdFind(t.getAttribute('data-bdchk'));if(cp2)bdSetSent(cp2,t.checked);return}
   if(t.matches('[data-rtsel]')){if(t.value){nbExec(t.getAttribute('data-rtsel')==='font'?'fontName':'fontSize',t.value)}t.selectedIndex=0;return}
   if(t.matches('[data-rtinput]')){nbExec(t.getAttribute('data-rtinput'),t.value);return}
   if(t.matches('[data-trt]')){var f4=trFind(t.dataset.trt);if(f4)trSet(f4,t.value&&!f4.t.due?{time:t.value,due:iso(TODAY)}:{time:t.value});return}
@@ -1401,7 +1422,7 @@ claude.use('db').then(function(d){
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
   apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();renderNav()},function(){});
-  nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdTpl=(tp&&tp.text)||'';notes=all.filter(function(x){return x.id!=='bday-template'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
+  nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};notes=all.filter(function(x){return x.id!=='bday-template'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){
     cases=snap.docs.map(function(x){return Object.assign({id:x.id},x.data())});
     loaded=true;
