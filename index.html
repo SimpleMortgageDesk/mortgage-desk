@@ -147,6 +147,7 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var
 .task .x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px}
 .add{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .add input[type=text]{flex:1;min-width:160px;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.tkedit{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;min-width:0}.tkedit input{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}.tkedit input[type=text]{flex:1;min-width:160px}.add input[type=time],.tact input[type=time]{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}.tact input[type=time]{padding:3px 6px;font-size:12px}
 .add input[type=date]{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .note{border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:10px 0;overflow-wrap:anywhere;white-space:pre-wrap}
 .tblwrap{overflow-x:auto;max-width:100%}
@@ -210,9 +211,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 09:09";</script>
-<script src="config.js?v=202611050909"></script>
-<script src="sync.js?v=202611050909"></script>
+<script>window.MD_BUILD="2026-11-05 09:27";</script>
+<script src="config.js?v=202611050927"></script>
+<script src="sync.js?v=202611050927"></script>
 <script>
 (function(){
 'use strict';
@@ -544,7 +545,7 @@ function startFrom(src){
   closeDrawer();openDrawer(null,d);
 }
 function openDrawer(id,draft){
-  openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
+  openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;editTk=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
   var c=id?cases.filter(function(x){return x.id===id})[0]:null;
   if(id&&!c){openId=undefined;return}
   c=c||Object.assign({stage:'enquiry',type:'Purchase',repayment:'repayment',applicants:[{}]},draft||{});
@@ -588,11 +589,14 @@ function openDrawer(id,draft){
   lastAuto=id?JSON.stringify(collectForm()):null;
   newBase=id?null:JSON.stringify(collectForm());
 }
-function closeDrawer(){editNote=null;var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null;newBase=null;ntTable=null;prTable=null}
+function closeDrawer(){editNote=null;editTk=null;var d=$('#drawer');d.hidden=true;d.innerHTML='';openId=undefined;lastAuto=null;newBase=null;ntTable=null;prTable=null}
 function currentCase(){return openId?cases.filter(function(x){return x.id===openId})[0]:null}
 
 function shortStamp(ts){return new Date(ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
-var editNote=null;
+var editNote=null,editTk=null;
+function tkKey(t){return (t.due||'9999-99-99')+' '+(t.time||'99:99')}
+function tkEditor(k,t){return '<div class="tkedit" data-tkbox="'+k+'"><input type="text" data-tkf="text" value="'+esc(t.text)+'" aria-label="Task"><input type="date" data-tkf="due" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-tkf="time" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="btn" data-tkesave="'+k+'">Save</button><button type="button" class="btn ghost" data-tkecancel="1">Cancel</button></div>'}
+function rerenderTasks(){if(openId)renderLive();if($('#trList'))renderTray()}
 function noteItem(n,list,suffix,fmt){
   var head=stampOf(n.ts)+suffix+(n.edited?' · edited '+shortStamp(n.edited):'');
   if(editNote&&editNote.list===list&&editNote.ts===n.ts)
@@ -603,11 +607,11 @@ function renderLive(){
   var box=$('#live');if(!box)return;
   if(!openId){var nb0=$('#liveNotes');if(nb0)nb0.innerHTML='';box.innerHTML='<fieldset><legend>Tasks and notes</legend><span class="muted">Save the case first, then add tasks and file notes here.</span></fieldset>';return}
   var c=currentCase();if(!c)return;
-  var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||((a.due||'9999')<(b.due||'9999')?-1:1)});
+  var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(tkKey(a)<tkKey(b)?-1:tkKey(a)>tkKey(b)?1:0)});
   var ns=(c.notes||[]).slice().sort(function(a,b){return b.ts-a.ts});
   var tasksHtml='<fieldset><legend>Tasks</legend>'+
-    (ts.length?ts.map(function(t){return '<div class="task'+(t.done?' done':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+'</span>':'')+'<button type="button" class="x" data-rmtk="'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
-    '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
+    (ts.length?ts.map(function(t){var tk0=c.id+'|'+t.id;if(editTk===tk0)return '<div class="task">'+tkEditor(tk0,t)+'</div>';return '<div class="task'+(t.done?' done':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</span>':'')+'<button type="button" class="btn ghost sm" data-tkedit="'+tk0+'">Edit</button><button type="button" class="x" data-rmtk="'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
+    '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
     (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
@@ -669,10 +673,12 @@ function updTrayBtn(){var b=$('#trayBtn');if(!b)return;var od=allTasks().filter(
 var TR_LABEL={over:'Overdue',today:'Due today',week:'Next 7 days',later:'Later',none:'No due date',done:'Done'};
 function trItem(x){
   var c=x.c,t=x.t,b=trBucket(x),k=c.id+'|'+t.id;
-  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
+  if(editTk===k)return '<div class="tt"><div class="tm">'+tkEditor(k,t)+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div></div></div>';
+  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
 }
 function renderTray(){
   var box=$('#trList');if(!box)return;
+  var aeT=document.activeElement;if(editTk&&aeT&&aeT.closest&&aeT.closest('[data-tkbox]'))return;
   var q=trQuery.trim().toLowerCase(),all=allTasks();
   var cnt={open:0,over:0,today:0,week:0,none:0,done:0};
   all.forEach(function(x){var b=trBucket(x);if(b==='done')cnt.done++;else{cnt.open++;if(b==='over')cnt.over++;if(b==='today'){cnt.today++;cnt.week++}if(b==='week')cnt.week++;if(b==='none')cnt.none++}});
@@ -689,7 +695,7 @@ function renderTray(){
       if(trFilter==='none'&&b!=='none')return false}
     if(q&&(x.t.text+' '+names(x.c)+' '+(x.c.clientNo||'')).toLowerCase().indexOf(q)<0)return false;
     return true});
-  items.sort(function(a,b){var da=a.t.due||'9999-99',db2=b.t.due||'9999-99';return da<db2?-1:da>db2?1:((a.t.created||0)-(b.t.created||0))||(cnum(a.c)-cnum(b.c))});
+  items.sort(function(a,b){var da=tkKey(a.t),db2=tkKey(b.t);return da<db2?-1:da>db2?1:((a.t.created||0)-(b.t.created||0))||(cnum(a.c)-cnum(b.c))});
   if(!items.length){box.innerHTML='<div class="empty">Nothing here.</div>';return}
   var order=['over','today','week','later','none','done'],h='';
   order.forEach(function(g){
@@ -700,24 +706,24 @@ function renderTray(){
   box.innerHTML=h;
 }
 function taskShell(){
-  return '<div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
+  return '<div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
 }
 function openTray(){
   trayOpen=true;var t=$('#tray');t.hidden=false;
-  t.innerHTML='<div class="th"><div><div class="eyebrow">Task tray</div><h2>Tasks</h2></div><button type="button" class="btn ghost" data-trclose>Close</button></div><div class="tb"><div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips"></div><div id="trList"></div></div>';
+  t.innerHTML='<div class="th"><div><div class="eyebrow">Task tray</div><h2>Tasks</h2></div><button type="button" class="btn ghost" data-trclose>Close</button></div><div class="tb"><div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips"></div><div id="trList"></div></div>';
   renderTray();
 }
 function closeTray(){trayOpen=false;var t=$('#tray');t.hidden=true;t.innerHTML=''}
 function trFind(key){var p=String(key).split('|');var c=cases.filter(function(x){return x.id===p[0]})[0];if(!c)return null;var t=(c.tasks||[]).filter(function(x){return x.id===p[1]})[0];return t?{c:c,t:t,n:+p[2]}:null}
 function trSet(f,change){patch(f.c.id,{tasks:(f.c.tasks||[]).map(function(x){return x.id===f.t.id?Object.assign({},x,change):x})})}
 function trAddTask(){
-  var tx=$('#trNewText').value.trim(),cv=$('#trNewCase').value,due=$('#trNewDue').value;
+  var tx=$('#trNewText').value.trim(),cv=$('#trNewCase').value,due=$('#trNewDue').value,tmv=$('#trNewTime').value;if(tmv&&!due)due=iso(TODAY);
   if(!tx){toast('Type the task first');return}
   var no=cv.split(' · ')[0].trim().toUpperCase();
   var c=cases.filter(function(x){return (x.clientNo||'').toUpperCase()===no})[0];
   if(!c){toast('Pick a client from the list');return}
-  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',done:false,created:Date.now()}])});
-  $('#trNewText').value='';$('#trNewDue').value='';toast('Task added to '+names(c));
+  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',time:tmv||'',done:false,created:Date.now()}])});
+  $('#trNewText').value='';$('#trNewDue').value='';$('#trNewTime').value='';toast('Task added to '+names(c));
 }
 
 /* ---------- notebook (general notes, not linked to any client) ---------- */
@@ -810,6 +816,19 @@ document.addEventListener('click',function(e){
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
+  var tke=t.closest&&t.closest('[data-tkedit]');
+  if(tke){editTk=tke.getAttribute('data-tkedit');rerenderTasks();setTimeout(function(){var x=document.querySelector('[data-tkf=text]');if(x)x.focus()},50);return}
+  if(t.closest&&t.closest('[data-tkecancel]')){editTk=null;try{document.activeElement.blur()}catch(e){}rerenderTasks();return}
+  var tks=t.closest&&t.closest('[data-tkesave]');
+  if(tks){
+    var key=tks.getAttribute('data-tkesave'),bx=tks.closest('[data-tkbox]'),f=trFind(key);if(!f||!bx)return;
+    var tx5=bx.querySelector('[data-tkf=text]').value.trim(),du5=bx.querySelector('[data-tkf=due]').value,tm5=bx.querySelector('[data-tkf=time]').value;
+    if(!tx5){toast('Type the task first');return}
+    if(tm5&&!du5)du5=iso(TODAY);
+    editTk=null;try{document.activeElement.blur()}catch(e){}
+    if(tx5===f.t.text&&du5===(f.t.due||'')&&tm5===(f.t.time||'')){rerenderTasks();return}
+    trSet(f,{text:tx5,due:du5,time:tm5,edited:Date.now()});toast('Task updated');return;
+  }
   var ne=t.closest&&t.closest('[data-nedit]');
   if(ne){var pp=ne.getAttribute('data-nedit').split('|');editNote={list:pp[0],ts:+pp[1]};renderLive();setTimeout(function(){var x=$('#ntEdit');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},50);return}
   if(t.id==='ntEditCancel'){editNote=null;renderLive();return}
@@ -842,7 +861,7 @@ document.addEventListener('click',function(e){
   }
   if(t.id==='tkAdd'){
     var tx=$('#tkText').value.trim();if(!tx)return;
-    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||'',done:false,created:Date.now()}]);
+    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||($('#tkTime').value?iso(TODAY):''),time:$('#tkTime').value||'',done:false,created:Date.now()}]);
     patch(openId,{tasks:arr});return;
   }
   var rt=t.closest('[data-rmtk]');
@@ -869,6 +888,7 @@ document.addEventListener('click',function(e){
 document.addEventListener('change',function(e){
   var t=e.target;
   if(t.matches('[data-trk]')){var f2=trFind(t.dataset.trk);if(f2)trSet(f2,{done:t.checked});return}
+  if(t.matches('[data-trt]')){var f4=trFind(t.dataset.trt);if(f4)trSet(f4,t.value&&!f4.t.due?{time:t.value,due:iso(TODAY)}:{time:t.value});return}
   if(t.matches('[data-trd]')){var f3=trFind(t.dataset.trd);if(f3)trSet(f3,{due:t.value});return}
   if(t.matches('[data-tk]')){
     var c=currentCase();patch(openId,{tasks:(c.tasks||[]).map(function(x){return x.id===t.dataset.tk?Object.assign({},x,{done:t.checked}):x})});return;
@@ -1087,7 +1107,7 @@ claude.use('db').then(function(d){
     var typing=ae&&(ae.id==='q');
     render();if(trayOpen)renderTray();
     if(typing){var q=$('#q');q.focus&&q.focus()}
-    if(openId){var ae2=document.activeElement;if(!(ae2&&(/^(ntText|prText|tkText|ntEdit)$/.test(ae2.id||'')||(ae2.closest&&ae2.closest('table.nt.xl')))))renderLive()}
+    if(openId){var ae2=document.activeElement;if(!(ae2&&(/^(ntText|prText|tkText|ntEdit)$/.test(ae2.id||'')||(ae2.closest&&(ae2.closest('table.nt.xl')||ae2.closest('[data-tkbox]'))))))renderLive()}
   },function(){loaded=true;db=null;render();toast('Lost connection to your saved cases')});
 });
 })();
