@@ -155,6 +155,35 @@ fieldset[data-col="protection"]{--sc:#c0507e}
 fieldset.secfs[data-col]{--sc:#00897b}
 fieldset.odfs[data-col]{--sc:#0078d4}
 fieldset.col-closed>*:not(legend){display:none}
+.prichk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#8c1d18;font-weight:600;white-space:nowrap}
+.prichk input{accent-color:#b3261e;width:15px;height:15px}
+.star{background:none;border:0;cursor:pointer;font-size:17px;color:var(--muted);padding:2px 4px;line-height:1}
+.star.on{color:#b3261e}
+.task.pri .t{font-weight:600}
+.tt.pri{border-left-color:#b3261e}
+.prtag{font-size:10px;font-weight:700;letter-spacing:.06em;background:#b3261e;color:#fff;border-radius:4px;padding:1px 5px}
+.tgh.prh{color:#b3261e}
+#side{display:none}
+@media (min-width:1000px){
+ body.side-on #app{display:grid;grid-template-columns:268px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+ body.side-on #app>header.top{grid-column:1/-1}
+ body.side-on #app>main{grid-column:2;min-width:0}
+ body.side-on #side{display:block;grid-column:1;grid-row:2;position:sticky;top:var(--hh,64px);height:calc(100vh - var(--hh,64px));overflow-y:auto;background:var(--bar);border-right:1px solid var(--line);padding:12px 12px 24px}
+}
+#side .sh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+#side .sh b{font-size:14px}
+#side .sg{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;margin:12px 0 6px}
+#side .sg.prh{color:#b3261e}
+#side .sg.bad{color:var(--bad)}
+.si{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:7px;padding:7px 8px;margin-bottom:5px}
+.si.pri{border-left-color:#b3261e;background:color-mix(in srgb,#b3261e 7%,var(--surface))}
+.si.over{border-left-color:var(--bad)}
+.si input{margin-top:2px;accent-color:var(--accent);flex:none}
+.si .lnk{display:block;text-align:left;background:none;border:0;padding:0;cursor:pointer;color:inherit;font:inherit}
+.si .st{font-size:13px;line-height:1.3;overflow-wrap:anywhere}
+.si .sc{font-size:11px;color:var(--muted);margin-top:2px}
+.si .sd{font-size:11px;margin-top:2px;color:var(--muted)}
+.si.over .sd{color:var(--bad)}
 .dhb .btn{white-space:nowrap}
 .secbtn[data-sectoggle],#ntHide,#prHide{display:none}
 .cno{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:500;vertical-align:1px}
@@ -275,17 +304,18 @@ table.nt th{font-weight:600;background:var(--surface2)}
     <nav id="nav" aria-label="Sections"></nav>
     <div class="sp"></div>
     <input id="q" class="search" type="search" placeholder="Search clients, address, reference" aria-label="Search cases">
-    <button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="logoutBtn">Log out</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files"><button class="btn" id="newBtn">New case</button>
+    <button class="btn ghost" id="sideBtn" data-sidetoggle="1" title="Show or hide the task bar on the left">Task bar</button><button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="logoutBtn">Log out</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files"><button class="btn" id="newBtn">New case</button>
   </div></header>
+  <aside id="side" aria-label="Task bar"></aside>
   <main class="gut" id="view"></main>
 </div>
 <div id="drawer" hidden></div>
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 11:12";</script>
-<script src="config.js?v=202611061112"></script>
-<script src="sync.js?v=202611061112"></script>
+<script>window.MD_BUILD="2026-11-06 11:45";</script>
+<script src="config.js?v=202611061145"></script>
+<script src="sync.js?v=202611061145"></script>
 <script>
 (function(){
 'use strict';
@@ -500,7 +530,7 @@ function renderNav(){updTrayBtn();
   }).join('');
 }
 function render(){
-  renderNav();
+  renderNav();applySide();
   var v=$('#view');
   if(!db){v.innerHTML='<div class="banner">Saving is not available in this view, so cases cannot be stored. Open the page from your artifact link while signed in.</div>';return}
   if(!loaded){v.innerHTML='<div class="empty">Loading your cases…</div>';return}
@@ -855,8 +885,8 @@ function bdBanner(){
 function shortStamp(ts){return new Date(ts).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
 var editNote=null,editTk=null;
 function tkKey(t){return (t.due||'9999-99-99')+' '+(t.time||'99:99')}
-function tkEditor(k,t){return '<div class="tkedit" data-tkbox="'+k+'"><input type="text" data-tkf="text" value="'+esc(t.text)+'" aria-label="Task"><input type="date" data-tkf="due" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-tkf="time" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="btn" data-tkesave="'+k+'">Save</button><button type="button" class="btn ghost" data-tkecancel="1">Cancel</button></div>'}
-function rerenderTasks(){if(openId)renderLive();if($('#trList'))renderTray()}
+function tkEditor(k,t){return '<div class="tkedit" data-tkbox="'+k+'"><input type="text" data-tkf="text" value="'+esc(t.text)+'" aria-label="Task"><input type="date" data-tkf="due" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-tkf="time" value="'+esc(t.time||'')+'" aria-label="Time"><label class="prichk"><input type="checkbox" data-tkf="pri"'+(t.pri?' checked':'')+'> High priority</label><button type="button" class="btn" data-tkesave="'+k+'">Save</button><button type="button" class="btn ghost" data-tkecancel="1">Cancel</button></div>'}
+function rerenderTasks(){if(openId)renderLive();if($('#trList'))renderTray();renderSide()}
 function noteItem(n,list,suffix,fmt){
   var head=stampOf(n.ts)+suffix+(n.edited?' · edited '+shortStamp(n.edited):'');
   if(editNote&&editNote.list===list&&editNote.ts===n.ts)
@@ -882,11 +912,11 @@ function renderLive(){
   var box=$('#live');if(!box)return;
   if(!openId){var nb0=$('#liveNotes');if(nb0)nb0.innerHTML='';box.innerHTML='<fieldset><legend>Tasks and notes</legend><span class="muted">Save the case first, then add tasks and file notes here.</span></fieldset>';decorateSecs();return}
   var c=currentCase();if(!c)return;
-  var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(tkKey(a)<tkKey(b)?-1:tkKey(a)>tkKey(b)?1:0)});
+  var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||((b.pri&&!b.done?1:0)-(a.pri&&!a.done?1:0))||(tkKey(a)<tkKey(b)?-1:tkKey(a)>tkKey(b)?1:0)});
   var ns=(c.notes||[]).slice().sort(function(a,b){return b.ts-a.ts});
   var tasksHtml='<fieldset><legend>Tasks</legend>'+
-    (ts.length?ts.map(function(t){var tk0=c.id+'|'+t.id;if(editTk===tk0)return '<div class="task">'+tkEditor(tk0,t)+'</div>';return '<div class="task'+(t.done?' done':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</span>':'')+'<button type="button" class="btn ghost sm" data-tkedit="'+tk0+'">Edit</button><button type="button" class="x" data-rmtk="'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
-    '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
+    (ts.length?ts.map(function(t){var tk0=c.id+'|'+t.id;if(editTk===tk0)return '<div class="task">'+tkEditor(tk0,t)+'</div>';return '<div class="task'+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</span>':'')+'<button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+tk0+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+tk0+'">Edit</button><button type="button" class="x" data-rmtk=""'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
+    '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="tkPri"> High priority</label><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
     (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
@@ -954,11 +984,31 @@ var trayOpen=false,trFilter='open',trQuery='';
 function allTasks(){var out=[];cases.forEach(function(c){if(c.stage==='lost')return;(c.tasks||[]).forEach(function(t){out.push({c:c,t:t})})});return out}
 function trBucket(x){var d=x.t.due;if(x.t.done)return 'done';if(!d)return 'none';var n=diff(d);return n<0?'over':n===0?'today':n<=7?'week':'later'}
 function updTrayBtn(){var b=$('#trayBtn');if(!b)return;var od=allTasks().filter(function(x){return trBucket(x)==='over'}).length;b.innerHTML='Tasks'+(od?'<span class="tbadge">'+od+' overdue</span>':'')}
-var TR_LABEL={over:'Overdue',today:'Due today',week:'Next 7 days',later:'Later',none:'No due date',done:'Done'};
+var TR_LABEL={pri:'High priority',over:'Overdue',today:'Due today',week:'Next 7 days',later:'Later',none:'No due date',done:'Done'};
 function trItem(x){
   var c=x.c,t=x.t,b=trBucket(x),k=c.id+'|'+t.id;
   if(editTk===k)return '<div class="tt"><div class="tm">'+tkEditor(k,t)+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div></div></div>';
-  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
+  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+(t.pri&&!t.done?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+k+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
+}
+var sideOn=true;try{sideOn=localStorage.getItem('sideOn')!=='0'}catch(e){}
+function applySide(){document.body.classList.toggle('side-on',sideOn);var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
+window.addEventListener('resize',function(){var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
+function sideItem(x,b){
+  var c=x.c,t=x.t,k=c.id+'|'+t.id;
+  return '<div class="si'+(t.pri?' pri':'')+(b==='over'?' over':'')+'"><input type="checkbox" data-trk="'+k+'" aria-label="Mark done"><div style="min-width:0"><button type="button" class="lnk st" data-open="'+c.id+'">'+(t.pri?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</button><div class="sc">'+esc(names(c))+cno(c)+'</div>'+(t.due?'<div class="sd">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</div>':'')+'</div></div>';
+}
+function renderSide(){
+  var s=$('#side');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
+  var open=allTasks().filter(function(x){return !x.t.done}).sort(function(a,b){var da=tkKey(a.t),db3=tkKey(b.t);return da<db3?-1:da>db3?1:0});
+  var h='<div class="sh"><b>Task bar</b><span class="muted" style="font-size:12px">'+open.length+' open</span><button type="button" class="btn ghost sm" data-sidetoggle="1">Hide</button></div>';
+  var pri=open.filter(function(x){return x.t.pri});
+  if(pri.length)h+='<div class="sg prh">High priority · '+pri.length+'</div>'+pri.map(function(x){return sideItem(x,trBucket(x))}).join('');
+  [['over','Overdue'],['today','Due today'],['week','Next 7 days'],['later','Later'],['none','No due date']].forEach(function(g){
+    var gi=open.filter(function(x){return !x.t.pri&&trBucket(x)===g[0]});
+    if(gi.length)h+='<div class="sg'+(g[0]==='over'?' bad':'')+'">'+g[1]+' · '+gi.length+'</div>'+gi.map(function(x){return sideItem(x,g[0])}).join('');
+  });
+  if(!open.length)h+='<div class="muted" style="font-size:13px">No open tasks.</div>';
+  s.innerHTML=h;
 }
 function renderTray(){
   var box=$('#trList');if(!box)return;
@@ -982,20 +1032,21 @@ function renderTray(){
     return true});
   items.sort(function(a,b){var da=tkKey(a.t),db2=tkKey(b.t);return da<db2?-1:da>db2?1:((a.t.created||0)-(b.t.created||0))||(cnum(a.c)-cnum(b.c))});
   if(!items.length){box.innerHTML='<div class="empty">Nothing here.</div>';return}
-  var order=['over','today','week','later','none','done'],h='';
+  var order=['pri','over','today','week','later','none','done'],h='';
+  var isP=function(x){return !x.t.done&&!!x.t.pri};
   order.forEach(function(g){
-    var gi=items.filter(function(x){return trBucket(x)===g});
+    var gi=items.filter(function(x){return g==='pri'?isP(x):(!isP(x)&&trBucket(x)===g)});
     if(!gi.length)return;
-    h+='<div class="tgh '+(g==='over'?'bad':'')+'">'+TR_LABEL[g]+' · '+gi.length+'</div>'+gi.map(trItem).join('');
+    h+='<div class="tgh '+(g==='over'?'bad':g==='pri'?'prh':'')+'">'+TR_LABEL[g]+' · '+gi.length+'</div>'+gi.map(trItem).join('');
   });
   box.innerHTML=h;
 }
 function taskShell(){
-  return '<div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
+  return '<div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="trNewPri"> High priority</label><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
 }
 function openTray(){
   trayOpen=true;var t=$('#tray');t.hidden=false;
-  t.innerHTML='<div class="th"><div><div class="eyebrow">Task tray</div><h2>Tasks</h2></div><button type="button" class="btn ghost" data-trclose>Close</button></div><div class="tb"><div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips"></div><div id="trList"></div></div>';
+  t.innerHTML='<div class="th"><div><div class="eyebrow">Task tray</div><h2>Tasks</h2></div><button type="button" class="btn ghost" data-trclose>Close</button></div><div class="tb"><div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="trNewPri"> High priority</label><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips"></div><div id="trList"></div></div>';
   renderTray();
 }
 function closeTray(){trayOpen=false;var t=$('#tray');t.hidden=true;t.innerHTML=''}
@@ -1007,8 +1058,8 @@ function trAddTask(){
   var no=cv.split(' · ')[0].trim().toUpperCase();
   var c=cases.filter(function(x){return (x.clientNo||'').toUpperCase()===no})[0];
   if(!c){toast('Pick a client from the list');return}
-  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',time:tmv||'',done:false,created:Date.now()}])});
-  $('#trNewText').value='';$('#trNewDue').value='';$('#trNewTime').value='';toast('Task added to '+names(c));
+  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:tx,due:due||'',time:tmv||'',done:false,created:Date.now(),pri:!!$('#trNewPri').checked}])});
+  $('#trNewText').value='';$('#trNewDue').value='';$('#trNewTime').value='';$('#trNewPri').checked=false;toast('Task added to '+names(c));
 }
 
 /* ---------- notebook (general notes, not linked to any client) ---------- */
@@ -1206,18 +1257,22 @@ document.addEventListener('click',function(e){
   if(t.id==='apDel'){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}var did=apEditId;apClose();if(did){write('ap-'+did,function(){return apCol.doc(did).delete()});toast('Appointment deleted');setTimeout(function(){if(view==='appointments')render();renderNav()},30)}return}
   var rtb=t.closest&&t.closest('[data-rt]');
   if(rtb){var rv=rtb.getAttribute('data-rt'),ix=rv.indexOf(':');if(ix>0)nbExec(rv.slice(0,ix),rv.slice(ix+1));else nbExec(rv);return}
+  var spr=t.closest&&t.closest('[data-tkpri]');
+  if(spr){var sf=trFind(spr.getAttribute('data-tkpri'));try{spr.blur()}catch(e){}if(sf)trSet(sf,{pri:!sf.t.pri});return}
+  var sdt=t.closest&&t.closest('[data-sidetoggle]');
+  if(sdt){sideOn=!sideOn;try{localStorage.setItem('sideOn',sideOn?'1':'0')}catch(x){}applySide();try{sdt.blur()}catch(e){}return}
   var tke=t.closest&&t.closest('[data-tkedit]');
   if(tke){editTk=tke.getAttribute('data-tkedit');rerenderTasks();setTimeout(function(){var x=document.querySelector('[data-tkf=text]');if(x)x.focus()},50);return}
   if(t.closest&&t.closest('[data-tkecancel]')){editTk=null;try{document.activeElement.blur()}catch(e){}rerenderTasks();return}
   var tks=t.closest&&t.closest('[data-tkesave]');
   if(tks){
     var key=tks.getAttribute('data-tkesave'),bx=tks.closest('[data-tkbox]'),f=trFind(key);if(!f||!bx)return;
-    var tx5=bx.querySelector('[data-tkf=text]').value.trim(),du5=bx.querySelector('[data-tkf=due]').value,tm5=bx.querySelector('[data-tkf=time]').value;
+    var tx5=bx.querySelector('[data-tkf=text]').value.trim(),du5=bx.querySelector('[data-tkf=due]').value,tm5=bx.querySelector('[data-tkf=time]').value,pr5=bx.querySelector('[data-tkf=pri]').checked;
     if(!tx5){toast('Type the task first');return}
     if(tm5&&!du5)du5=iso(TODAY);
     editTk=null;try{document.activeElement.blur()}catch(e){}
-    if(tx5===f.t.text&&du5===(f.t.due||'')&&tm5===(f.t.time||'')){rerenderTasks();return}
-    trSet(f,{text:tx5,due:du5,time:tm5,edited:Date.now()});toast('Task updated');return;
+    if(tx5===f.t.text&&du5===(f.t.due||'')&&tm5===(f.t.time||'')&&pr5===!!f.t.pri){rerenderTasks();return}
+    trSet(f,{text:tx5,due:du5,time:tm5,pri:pr5,edited:Date.now()});toast('Task updated');return;
   }
   var ne=t.closest&&t.closest('[data-nedit]');
   if(ne){var pp=ne.getAttribute('data-nedit').split('|');editNote={list:pp[0],ts:+pp[1]};renderLive();setTimeout(function(){var x=$('#ntEdit');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},50);return}
@@ -1251,7 +1306,7 @@ document.addEventListener('click',function(e){
   }
   if(t.id==='tkAdd'){
     var tx=$('#tkText').value.trim();if(!tx)return;
-    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||($('#tkTime').value?iso(TODAY):''),time:$('#tkTime').value||'',done:false,created:Date.now()}]);
+    var c2=currentCase();var arr=(c2.tasks||[]).concat([{id:uid(),text:tx,due:$('#tkDue').value||($('#tkTime').value?iso(TODAY):''),time:$('#tkTime').value||'',done:false,created:Date.now(),pri:!!$('#tkPri').checked}]);
     patch(openId,{tasks:arr});return;
   }
   var rt=t.closest('[data-rmtk]');
