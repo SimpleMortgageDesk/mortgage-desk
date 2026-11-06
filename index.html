@@ -78,8 +78,8 @@ main{max-width:none;margin:0 auto;padding-block:18px 60px}
 .empty .btn{margin-top:14px}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
-fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#800020}
-fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#800020}
+fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#2f4a40}
+fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#2f4a40}
 .sec2{border:1px solid #00897b;border-left-width:5px;border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,137,123,.10)}
 .sec2 .top2>span:first-child{color:#00897b;font-weight:700}
 .sec2.sec2-collapsed .sgrid{display:none}
@@ -131,9 +131,10 @@ td.r,th.r{text-align:right}
 .strip span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .db{flex:1;overflow-y:auto;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px 16px;display:flex;flex-direction:column;gap:14px}
 fieldset{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:0;padding:12px 14px 14px;min-width:0}
-legend{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#800020;padding:0 6px;font-weight:700}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) legend,:root:not([data-theme="light"]) fieldset.secfs legend,:root:not([data-theme="light"]) fieldset.odfs legend{color:#e8899f}}
-:root[data-theme="dark"] legend,:root[data-theme="dark"] fieldset.secfs legend,:root[data-theme="dark"] fieldset.odfs legend{color:#e8899f}
+legend{float:left;width:100%;box-sizing:border-box;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;padding:0 0 7px;margin:0 0 10px;font-weight:700;border-bottom:1px solid #d3ddd8}
+legend+*{clear:both}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) legend,:root:not([data-theme="light"]) fieldset.secfs legend,:root:not([data-theme="light"]) fieldset.odfs legend{color:#a9cdbb}:root:not([data-theme="light"]) legend{border-bottom-color:#33403b}}
+:root[data-theme="dark"] legend,:root[data-theme="dark"] fieldset.secfs legend,:root[data-theme="dark"] fieldset.odfs legend{color:#a9cdbb}:root[data-theme="dark"] legend{border-bottom-color:#33403b}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 12px}
 .grid .wide{grid-column:1/-1}
 label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
@@ -144,6 +145,7 @@ label.f input,label.f select,label.f textarea{padding:8px 9px;border:1px solid v
 .secbtn{margin-left:6px;padding:1px 8px;font-size:11px}
 fieldset.sec-hidden>.grid{display:none}
 fieldset.col-closed>*:not(legend){display:none}
+.dhb .btn{white-space:nowrap}
 .secbtn[data-sectoggle],#ntHide,#prHide{display:none}
 .cno{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:500;vertical-align:1px}
 label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var(--accent)}
@@ -182,8 +184,8 @@ table.nt th{font-weight:600;background:var(--surface2)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips button{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12px}
 .chips button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
-.tgh{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1b5e20;margin:8px 0 6px}
-.tgh.bad{color:#1b5e20}
+.tgh{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;margin:8px 0 6px}
+.tgh.bad{color:#2f4a40}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tgh,:root:not([data-theme="light"]) .tgh.bad{color:#81c784}}
 :root[data-theme="dark"] .tgh,:root[data-theme="dark"] .tgh.bad{color:#81c784}
 .tt{display:flex;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:7px;padding:9px 10px;margin-bottom:6px}
@@ -271,9 +273,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 10:31";</script>
-<script src="config.js?v=202611061031"></script>
-<script src="sync.js?v=202611061031"></script>
+<script>window.MD_BUILD="2026-11-06 10:46";</script>
+<script src="config.js?v=202611061046"></script>
+<script src="sync.js?v=202611061046"></script>
 <script>
 (function(){
 'use strict';
@@ -634,9 +636,9 @@ function openDrawer(id,draft){
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
-  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2>'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+'</div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
+  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2></div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
-  '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
+  '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
    (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button></fieldset>'+
    '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add each property that has its own mortgage. The next review date and the reminders are taken from these.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
