@@ -78,8 +78,8 @@ main{max-width:none;margin:0 auto;padding-block:18px 60px}
 .empty .btn{margin-top:14px}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
-fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#0078d4}
-fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#00897b}
+fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#1b5e20}
+fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#1b5e20}
 .sec2{border:1px solid #00897b;border-left-width:5px;border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,137,123,.10)}
 .sec2 .top2>span:first-child{color:#00897b;font-weight:700}
 .sec2.sec2-collapsed .sgrid{display:none}
@@ -131,7 +131,9 @@ td.r,th.r{text-align:right}
 .strip span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .db{flex:1;overflow-y:auto;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px 16px;display:flex;flex-direction:column;gap:14px}
 fieldset{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:0;padding:12px 14px 14px;min-width:0}
-legend{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 6px;font-weight:600}
+legend{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#1b5e20;padding:0 6px;font-weight:700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) legend,:root:not([data-theme="light"]) fieldset.secfs legend,:root:not([data-theme="light"]) fieldset.odfs legend{color:#81c784}}
+:root[data-theme="dark"] legend,:root[data-theme="dark"] fieldset.secfs legend,:root[data-theme="dark"] fieldset.odfs legend{color:#81c784}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 12px}
 .grid .wide{grid-column:1/-1}
 label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
@@ -178,8 +180,10 @@ table.nt th{font-weight:600;background:var(--surface2)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips button{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12px}
 .chips button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
-.tgh{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:8px 0 6px}
-.tgh.bad{color:var(--bad)}
+.tgh{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1b5e20;margin:8px 0 6px}
+.tgh.bad{color:#1b5e20}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tgh,:root:not([data-theme="light"]) .tgh.bad{color:#81c784}}
+:root[data-theme="dark"] .tgh,:root[data-theme="dark"] .tgh.bad{color:#81c784}
 .tt{display:flex;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:7px;padding:9px 10px;margin-bottom:6px}
 .tt.bad{border-left-color:var(--bad)}.tt.warn{border-left-color:var(--warn)}
 .tt.done .tx{text-decoration:line-through;color:var(--muted)}
@@ -265,9 +269,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 09:51";</script>
-<script src="config.js?v=202611060951"></script>
-<script src="sync.js?v=202611060951"></script>
+<script>window.MD_BUILD="2026-11-06 10:18";</script>
+<script src="config.js?v=202611061018"></script>
+<script src="sync.js?v=202611061018"></script>
 <script>
 (function(){
 'use strict';
@@ -534,7 +538,7 @@ function casesHTML(){
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>';
   if(!cases.length)return h+emptyHTML();
   h+='<div class="tw"><table><thead><tr><th>Client</th><th>Type</th><th>Stage</th><th>Lender</th><th>Next task due</th><th>Review date</th><th>Latest note</th><th>Protection</th></tr></thead><tbody>';
-  if(!list.length)h+='<tr><td colspan="9" class="muted">No cases match.</td></tr>';
+  if(!list.length)h+='<tr><td colspan="8" class="muted">No cases match.</td></tr>';
   list.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
     h+='<tr class="click" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+'</div></td>'+
