@@ -78,6 +78,7 @@ main{max-width:none;margin:0 auto;padding-block:18px 60px}
 .empty .btn{margin-top:14px}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#0078d4}
 fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#00897b}
 .sec2{border:1px solid #00897b;border-left-width:5px;border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,137,123,.10)}
 .sec2 .top2>span:first-child{color:#00897b;font-weight:700}
@@ -264,9 +265,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 09:09";</script>
-<script src="config.js?v=202611060909"></script>
-<script src="sync.js?v=202611060909"></script>
+<script>window.MD_BUILD="2026-11-06 09:51";</script>
+<script src="config.js?v=202611060951"></script>
+<script src="sync.js?v=202611060951"></script>
 <script>
 (function(){
 'use strict';
@@ -442,10 +443,6 @@ function patch(id,data){
 function caseEvents(c){
   var ev=[],st=c.stage,n=names(c);
   function add(date,label,kind){if(date)ev.push({date:date,label:label,kind:kind,id:c.id,who:n})}
-  if(['enquiry','factfind','dip'].indexOf(st)>-1&&c.dipExpiry)add(c.dipExpiry,'Decision in principle expires','dip');
-  if(['application','offer'].indexOf(st)>-1&&c.completionDate)add(c.completionDate,'Target completion','completion');
-  if(st==='offer'&&c.offerExpiry)add(c.offerExpiry,'Mortgage offer expires','offer');
-  if(st==='offer'&&c.offerDate){var r=addDays(c.offerDate,10);if(diff(r)>=0)add(r,'Reflection period ends','reflect')}
   if(st==='completed')reviewItems(c).forEach(function(r){
     ev.push({date:r.date,label:(r.sec?'Start rate review for '+r.addr+(r.lender?' ('+r.lender+')':''):'Start rate review')+(r.fixedUntil?'. Product ends '+fd(r.fixedUntil):''),kind:'review',id:c.id,who:n,sec:r.sec});
   });
@@ -507,11 +504,9 @@ function pipelineHTML(){
   var list=sortList(visible().filter(function(c){return c.stage!=='lost'}));
   var active=list.filter(function(c){return c.stage!=='completed'});
   var vol=active.reduce(function(a,c){return a+(c.loanAmount||0)},0);
-  var expiring=cases.filter(function(c){return c.stage==='offer'&&c.offerExpiry&&diff(c.offerExpiry)<=30&&diff(c.offerExpiry)>=0}).length;
   var h='<div class="pagehead"><h1>Pipeline</h1><div class="stats">'+
     '<div class="stat"><b>'+active.length+'</b><span>Live cases</span></div>'+
-    '<div class="stat"><b>'+money(vol)+'</b><span>Lending in progress</span></div>'+
-    '<div class="stat"><b>'+expiring+'</b><span>Offers expiring in 30 days</span></div></div></div><div class="board">';
+    '<div class="stat"><b>'+money(vol)+'</b><span>Lending in progress</span></div></div></div><div class="board">';
   STAGES.forEach(function(s,i){
     var cs=list.filter(function(c){return c.stage===s.id});
     var sum=cs.reduce(function(a,c){return a+(c.loanAmount||0)},0);
@@ -538,14 +533,14 @@ function casesHTML(){
   var h='<div class="pagehead"><h1>All cases</h1><button class="btn ghost" data-act="export">Export CSV</button></div>'+
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>';
   if(!cases.length)return h+emptyHTML();
-  h+='<div class="tw"><table><thead><tr><th>Client</th><th>Type</th><th>Stage</th><th>Lender</th><th>Next task due</th><th>Review date</th><th>Mortgage expiry</th><th>Latest note</th><th>Protection</th></tr></thead><tbody>';
+  h+='<div class="tw"><table><thead><tr><th>Client</th><th>Type</th><th>Stage</th><th>Lender</th><th>Next task due</th><th>Review date</th><th>Latest note</th><th>Protection</th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="9" class="muted">No cases match.</td></tr>';
   list.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
     h+='<tr class="click" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+'</div></td>'+
       '<td>'+esc(c.type||'')+'</td><td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>'+
       '<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>'+
-      taskCell(c)+'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td><td>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'<span class="muted">—</span>')+'</td>'+
+      taskCell(c)+'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>'+
       '<td style="max-width:260px;font-size:12px">'+latestNoteCell(c)+'</td><td style="max-width:260px;font-size:12px">'+latestNoteCell(c,'protection')+'</td></tr>';
   });
   return h+'</tbody></table></div>';
@@ -634,11 +629,13 @@ function openDrawer(id,draft){
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
   '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2>'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+'</div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
-  '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+money(c.monthlyPayment)+'</b><span>Monthly</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div><div><b>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'—')+'</b><span>Mortgage expiry</span></div></div></div>'+
+  '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   '<div id="liveNotes"></div>'+(!id&&!draft?pickClient():'')+'<fieldset><legend>Clients</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><label class="f" style="margin-top:12px">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
+   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button></fieldset>'+
    '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add each property that has its own mortgage. The next review date and the reminders are taken from these.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
+   '<fieldset class="odfs"><legend>OneDrive folder</legend><label class="f">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
+   '<div id="liveNotes"></div>'+
    '<fieldset><legend>Case</legend><div class="grid">'+
      fld('clientNo','Client number',c.clientNo)+
      sel('stage','Stage',c.stage,STAGES.map(function(s){return [s.id,s.label]}).concat([['lost','Closed lost']]))+
@@ -650,18 +647,10 @@ function openDrawer(id,draft){
      fld('termYears','Term (years)',c.termYears,'number')+
      sel('repayment','Repayment method',c.repayment,[['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']])+
    '</div></fieldset>'+
-   secFs('lender','Lender and product')+
-     fld('lender','Lender',c.lender)+fld('lenderRef','Lender reference / roll number',c.lenderRef)+
-     fld('product','Product code',c.product)+fld('rate','Initial rate (%)',c.rate,'number')+
-     fld('fixedUntil','Initial rate ends',c.fixedUntil,'date')+'<label class="f">Mortgage review date (you can change it; blank follows 6 months before rate end)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(ownReview(c))+'"></label>'+fld('followOnRate','Rate after (%)',c.followOnRate,'number')+
-     fld('monthlyPayment','Monthly payment (£)',c.monthlyPayment,'number')+fld('erc','Early repayment charge',c.erc,'text')+
+   secFs('lender','Lender')+
+     fld('lender','Lender name',c.lender)+fld('fixedUntil','Initial deal ends',c.fixedUntil,'date')+
+     fld('lenderRef','Lender reference / roll number',c.lenderRef)+'<label class="f">Mortgage review date (six months before the initial deal ends. You can change it)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(ownReview(c))+'"></label>'+
    '</div></fieldset>'+
-   secFs('dates','Key stages and dates')+
-     fld('dipDate','DIP issued',c.dipDate,'date')+fld('dipExpiry','DIP expires',c.dipExpiry,'date')+fld('dipAmount','DIP amount (£)',c.dipAmount,'number')+
-     fld('appDate','Application submitted',c.appDate,'date')+fld('offerDate','Offer issued',c.offerDate,'date')+fld('offerExpiry','Offer expires',c.offerExpiry,'date')+
-     fld('completionDate','Target completion',c.completionDate,'date')+fld('mortgageExpiry','Mortgage expiry (end of term)',c.mortgageExpiry,'date')+
-   '</div></fieldset>'+
-   
    '<div id="live"></div>'+
   '</form>'+
   '<div class="df"><div>'+(id?'<button type="button" class="btn danger" id="delBtn">Delete case</button><span class="muted" id="autoMsg" style="font-size:12px;margin-left:10px">Auto-save on (every 5 seconds)</span>':'')+'</div><div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn" id="saveBtn">Save case</button></div></div></div>';
