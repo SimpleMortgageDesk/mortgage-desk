@@ -78,6 +78,12 @@ main{max-width:none;margin:0 auto;padding-block:18px 60px}
 .empty .btn{margin-top:14px}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#00897b}
+.sec2{border:1px solid #00897b;border-left-width:5px;border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,137,123,.10)}
+.sec2 .top2>span:first-child{color:#00897b;font-weight:700}
+.sec2.sec2-collapsed .sgrid{display:none}
+.sec2 .secsum{font-size:12px;margin:2px 0 8px}
+.ev.sec{border-left:4px solid #00897b}
 .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .chip.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
 .chip.ok{background:var(--accent-soft);color:var(--ok);border-color:transparent}
@@ -258,9 +264,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-05 20:59";</script>
-<script src="config.js?v=202611052059"></script>
-<script src="sync.js?v=202611052059"></script>
+<script>window.MD_BUILD="2026-11-06 09:09";</script>
+<script src="config.js?v=202611060909"></script>
+<script src="sync.js?v=202611060909"></script>
 <script>
 (function(){
 'use strict';
@@ -300,7 +306,15 @@ function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function
 function cno(c){return c.clientNo?' <span class="cno">'+esc(c.clientNo)+'</span>':''}
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
-function reviewOf(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-6):'')}
+function ownReview(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-6):'')}
+function secReview(x){return x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-6):'')}
+function reviewItems(c){
+  var secs=c.securities||[];
+  if(secs.length){var out=[];secs.forEach(function(x){var d=secReview(x);if(d)out.push({date:d,addr:x.address||'Security address',lender:x.lender||'',fixedUntil:x.fixedUntil||'',sec:true})});return out}
+  var d=ownReview(c);return d?[{date:d,addr:'',lender:'',fixedUntil:c.fixedUntil||'',sec:false}]:[];
+}
+function reviewOf(c){var r=reviewItems(c).map(function(x){return x.date}).sort();return r[0]||''}
+function rateEndOf(c){var secs=c.securities||[];if(secs.length){var r=secs.map(function(x){return x.fixedUntil}).filter(Boolean).sort();return r[0]||''}return c.fixedUntil||''}
 function firstName(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim()}).filter(Boolean)[0]||'';return a.replace(/^(mr|mrs|miss|ms|dr)\.?\s+/i,'').toLowerCase()}
 function cnum(c){var m=/(\d+)/.exec(c.clientNo||'');return m?+m[1]:1e9}
 function odLink(u){u=String(u||'').trim();return /^https?:\/\//i.test(u)?'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open OneDrive folder</a>':''}
@@ -432,10 +446,9 @@ function caseEvents(c){
   if(['application','offer'].indexOf(st)>-1&&c.completionDate)add(c.completionDate,'Target completion','completion');
   if(st==='offer'&&c.offerExpiry)add(c.offerExpiry,'Mortgage offer expires','offer');
   if(st==='offer'&&c.offerDate){var r=addDays(c.offerDate,10);if(diff(r)>=0)add(r,'Reflection period ends','reflect')}
-  if(st==='completed'&&reviewOf(c)){
-    var rv=reviewOf(c);
-    add(rv,'Start rate review'+(c.fixedUntil?'. Product ends '+fd(c.fixedUntil):''),'review');
-  }
+  if(st==='completed')reviewItems(c).forEach(function(r){
+    ev.push({date:r.date,label:(r.sec?'Start rate review for '+r.addr+(r.lender?' ('+r.lender+')':''):'Start rate review')+(r.fixedUntil?'. Product ends '+fd(r.fixedUntil):''),kind:'review',id:c.id,who:n,sec:r.sec});
+  });
   (c.tasks||[]).forEach(function(t){if(!t.done&&t.due)ev.push({date:t.due,label:t.text,kind:'task',id:c.id,who:n})});
   return ev;
 }
@@ -550,7 +563,7 @@ function remindersHTML(){
     if(!items.length)return;
     h+='<div class="group"><h3 class="'+x[1]+'">'+x[0]+' · '+items.length+'</h3>';
     items.forEach(function(e){
-      h+='<button class="ev" data-open="'+e.id+'"><div class="d">'+fd(e.date)+'<small>'+rel(e.date)+'</small></div><div><b>'+esc(e.label)+'</b><div class="who">'+esc(e.who)+'</div></div><span class="chip '+tone(e.date)+'">'+({dip:'DIP',offer:'Offer',completion:'Completion',reflect:'Reflection',review:'Review',task:'Task'}[e.kind])+'</span></button>';
+      h+='<button class="ev'+(e.sec?' sec':'')+'" data-open="'+e.id+'"><div class="d">'+fd(e.date)+'<small>'+rel(e.date)+'</small></div><div><b>'+esc(e.label)+'</b><div class="who">'+esc(e.who)+'</div></div><span class="chip '+tone(e.date)+'">'+(e.sec?'Security review':{dip:'DIP',offer:'Offer',completion:'Completion',reflect:'Reflection',review:'Review',task:'Task'}[e.kind])+'</span></button>';
     });
     h+='</div>';
   });
@@ -574,6 +587,24 @@ function plinks(p){
   var intl=d.charAt(0)==='+'?d.slice(1):d.charAt(0)==='0'?'44'+d.slice(1):d;
   return '<a href="https://wa.me/'+intl+'" target="_blank" rel="noopener">WhatsApp</a>';
 }
+var secCollapsed={};
+function secSumText(x){var rv=x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-6):'');var parts=[x.lender,x.rate?x.rate+'%':'',rv?'Review '+fd(rv):''].filter(Boolean);return parts.join(' · ')||'No lender details yet'}
+function secRow(x,i){
+  x=x||{};var sid=x.id||('s'+Math.random().toString(36).slice(2,9));
+  var coll=secCollapsed[sid]!==undefined?secCollapsed[sid]:!!(x.lender||x.fixedUntil||x.reviewDate);
+  var f=function(k,l,t,ex){var v=x[k];return '<label class="f'+(ex||'')+'">'+l+'<input data-s="'+k+'"'+(t?' type="'+t+'"':'')+(t==='number'?' step="any" inputmode="decimal"':'')+' value="'+esc(v==null?'':v)+'"></label>'};
+  var rv=secReview(x);
+  return '<div class="sec2'+(coll?' sec2-collapsed':'')+'" data-sid="'+sid+'"><div class="top2"><span>Security address '+(i+1)+'</span><span><button type="button" class="btn ghost sm" data-sectog="'+sid+'">'+(coll?'Show lender details':'Hide lender details')+'</button> <button type="button" class="btn ghost sm" data-rmsec="'+sid+'">Remove</button></span></div>'+
+   '<div class="grid"><label class="f wide">Security address<input data-s="address" value="'+esc(x.address)+'" placeholder="Address of the property the mortgage is secured on"></label></div>'+
+   '<div class="secsum muted">'+esc(secSumText(x))+'</div>'+
+   '<div class="sgrid"><div class="grid">'+f('lender','Lender')+f('lenderRef','Lender reference / roll number')+f('product','Product code')+f('rate','Initial rate (%)','number')+f('fixedUntil','Initial rate ends','date')+
+   '<label class="f">Mortgage review date (you can change it; blank follows 6 months before rate end)<input data-s="reviewDate" type="date" data-auto="'+(x.reviewDate?'0':'1')+'" value="'+esc(rv)+'"></label>'+
+   f('followOnRate','Rate after (%)','number')+f('monthlyPayment','Monthly payment (£)','number')+f('loanAmount','Loan amount (£)','number')+f('erc','Early repayment charge')+f('mortgageExpiry','Mortgage expiry (end of term)','date')+'</div></div></div>';
+}
+function updSRev(){var el=$('#sRev');if(!el)return;var cards=document.querySelectorAll('#secs .sec2'),v='';
+  if(cards.length){var ds=[];cards.forEach(function(cd){var r=cd.querySelector('[data-s="reviewDate"]'),fu=cd.querySelector('[data-s="fixedUntil"]'),d=(r&&r.value)||(fu&&fu.value?addMonths(fu.value,-6):'');if(d)ds.push(d)});v=ds.sort()[0]||''}
+  else{var o=$('#f-reviewDate');v=o?o.value:''}
+  el.textContent=v?fd(v):'—'}
 function appRow(a,i){
   a=a||{};
   return '<div class="app" data-app="'+i+'"><div class="top2"><span>Applicant '+(i+1)+'</span><button type="button" class="btn ghost sm" data-rmapp="'+i+'">Remove</button></div><div class="grid">'+
@@ -603,10 +634,11 @@ function openDrawer(id,draft){
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
   '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2>'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+'</div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
-  '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+money(c.monthlyPayment)+'</b><span>Monthly</span></div><div><b>'+(c.fixedUntil?fd(c.fixedUntil):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div><div><b>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'—')+'</b><span>Mortgage expiry</span></div></div></div>'+
+  '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+money(c.monthlyPayment)+'</b><span>Monthly</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div><div><b>'+(c.mortgageExpiry?fd(c.mortgageExpiry):'—')+'</b><span>Mortgage expiry</span></div></div></div>'+
   '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
    '<div id="liveNotes"></div>'+(!id&&!draft?pickClient():'')+'<fieldset><legend>Clients</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><label class="f" style="margin-top:12px">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
+   '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add each property that has its own mortgage. The next review date and the reminders are taken from these.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
    '<fieldset><legend>Case</legend><div class="grid">'+
      fld('clientNo','Client number',c.clientNo)+
      sel('stage','Stage',c.stage,STAGES.map(function(s){return [s.id,s.label]}).concat([['lost','Closed lost']]))+
@@ -621,7 +653,7 @@ function openDrawer(id,draft){
    secFs('lender','Lender and product')+
      fld('lender','Lender',c.lender)+fld('lenderRef','Lender reference / roll number',c.lenderRef)+
      fld('product','Product code',c.product)+fld('rate','Initial rate (%)',c.rate,'number')+
-     fld('fixedUntil','Initial rate ends',c.fixedUntil,'date')+'<label class="f">Mortgage review date (you can change it; blank follows 6 months before rate end)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(reviewOf(c))+'"></label>'+fld('followOnRate','Rate after (%)',c.followOnRate,'number')+
+     fld('fixedUntil','Initial rate ends',c.fixedUntil,'date')+'<label class="f">Mortgage review date (you can change it; blank follows 6 months before rate end)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(ownReview(c))+'"></label>'+fld('followOnRate','Rate after (%)',c.followOnRate,'number')+
      fld('monthlyPayment','Monthly payment (£)',c.monthlyPayment,'number')+fld('erc','Early repayment charge',c.erc,'text')+
    '</div></fieldset>'+
    secFs('dates','Key stages and dates')+
@@ -858,6 +890,14 @@ function collectForm(){
   });
   var auto=o.fixedUntil?addMonths(o.fixedUntil,-6):'';
   if(o.reviewDate===auto)o.reviewDate='';
+  o.securities=[];
+  document.querySelectorAll('#secs .sec2').forEach(function(card){
+    var x={id:card.getAttribute('data-sid')};
+    card.querySelectorAll('[data-s]').forEach(function(i){var k=i.getAttribute('data-s');x[k]=i.type==='number'?num(i.value):i.value.trim()});
+    var a2=x.fixedUntil?addMonths(x.fixedUntil,-6):'';if(x.reviewDate===a2)x.reviewDate='';
+    var has=['address','lender','lenderRef','product','fixedUntil','reviewDate','erc','mortgageExpiry','rate','followOnRate','monthlyPayment','loanAmount'].some(function(k){return x[k]});
+    if(has)o.securities.push(x);
+  });
   return o;
 }
 function saveCase(){
@@ -1095,6 +1135,11 @@ document.addEventListener('click',function(e){
   if(t.closest('[data-close]')){closeDrawer();return}
   if(t.id==='saveBtn'){saveCase();return}
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
+  if(t.id==='addSec'){var sn=document.querySelectorAll('#secs .sec2').length;$('#secs').insertAdjacentHTML('beforeend',secRow({},sn));var na=$('#secs .sec2:last-child [data-s="address"]');if(na)na.focus();return}
+  var rms=t.closest('[data-rmsec]');
+  if(rms){var cd=rms.closest('.sec2');cd.remove();document.querySelectorAll('#secs .sec2').forEach(function(c2,j){var h=c2.querySelector('.top2>span');if(h)h.textContent='Security address '+(j+1)});updSRev();return}
+  var sg=t.closest('[data-sectog]');
+  if(sg){var cd2=sg.closest('.sec2'),isC=cd2.classList.toggle('sec2-collapsed');secCollapsed[cd2.getAttribute('data-sid')]=isC;sg.textContent=isC?'Show lender details':'Hide lender details';return}
   var rm=t.closest('[data-rmapp]');
   if(rm){var row=rm.closest('.app');if(document.querySelectorAll('#apps .app').length>1)row.remove();return}
   if(t.id==='apOv'){apClose();return}
@@ -1229,8 +1274,18 @@ document.addEventListener('input',function(e){
   }
   if(t.getAttribute&&t.getAttribute('data-a')==='email'){var el=t.parentNode.querySelector('.el');if(el)el.innerHTML=elinks(t.value)}
   if(t.getAttribute&&t.getAttribute('data-a')==='phone'){var pl=t.parentNode.querySelector('.pl');if(pl)pl.innerHTML=plinks(t.value)}
-  if(t.id==='f-fixedUntil'){var ri=$('#f-reviewDate');if(ri&&ri.getAttribute('data-auto')==='1'){var rv=t.value?addMonths(t.value,-6):'';ri.value=rv;var rs1=$('#sRev');if(rs1)rs1.textContent=rv?fd(rv):'—'}}
-  if(t.id==='f-reviewDate'){t.setAttribute('data-auto','0');var rs0=$('#sRev');if(rs0)rs0.textContent=t.value?fd(t.value):'—'}
+  if(t.id==='f-fixedUntil'){var ri=$('#f-reviewDate');if(ri&&ri.getAttribute('data-auto')==='1'){var rv=t.value?addMonths(t.value,-6):'';ri.value=rv;updSRev()}}
+  if(t.id==='f-reviewDate'){t.setAttribute('data-auto','0');updSRev()}
+  if(t.getAttribute&&t.getAttribute('data-s')){
+    var scd=t.closest('.sec2'),sk=t.getAttribute('data-s');
+    if(scd){
+      if(sk==='fixedUntil'){var sr=scd.querySelector('[data-s="reviewDate"]');if(sr&&sr.getAttribute('data-auto')==='1')sr.value=t.value?addMonths(t.value,-6):''}
+      if(sk==='reviewDate')t.setAttribute('data-auto','0');
+      var gv=function(k){var q=scd.querySelector('[data-s="'+k+'"]');return q?q.value.trim():''};
+      var sm=scd.querySelector('.secsum');if(sm)sm.textContent=secSumText({lender:gv('lender'),rate:gv('rate'),fixedUntil:gv('fixedUntil'),reviewDate:gv('reviewDate')});
+      updSRev();
+    }
+  }
   if(t.id==='f-oneDriveLink'){var od=$('#odl');if(od)od.innerHTML=odLink(t.value)}
   if(t.id==='trQ'){trQuery=t.value;renderTray()}
   if(t.id==='nbTitle'||t.id==='nbBody'){nbSched()}
