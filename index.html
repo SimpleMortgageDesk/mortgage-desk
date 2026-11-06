@@ -78,8 +78,8 @@ main{max-width:none;margin:0 auto;padding-block:18px 60px}
 .empty .btn{margin-top:14px}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
-fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#1b5e20}
-fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#1b5e20}
+fieldset.odfs{border-color:#0078d4;background:rgba(0,120,212,.07)}fieldset.odfs legend{color:#800020}
+fieldset.secfs{border-color:#00897b;background:rgba(0,137,123,.06)}fieldset.secfs legend{color:#800020}
 .sec2{border:1px solid #00897b;border-left-width:5px;border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,137,123,.10)}
 .sec2 .top2>span:first-child{color:#00897b;font-weight:700}
 .sec2.sec2-collapsed .sgrid{display:none}
@@ -131,9 +131,9 @@ td.r,th.r{text-align:right}
 .strip span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .db{flex:1;overflow-y:auto;padding:14px max(16px,env(safe-area-inset-right,0px)) 24px 16px;display:flex;flex-direction:column;gap:14px}
 fieldset{border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:0;padding:12px 14px 14px;min-width:0}
-legend{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#1b5e20;padding:0 6px;font-weight:700}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) legend,:root:not([data-theme="light"]) fieldset.secfs legend,:root:not([data-theme="light"]) fieldset.odfs legend{color:#81c784}}
-:root[data-theme="dark"] legend,:root[data-theme="dark"] fieldset.secfs legend,:root[data-theme="dark"] fieldset.odfs legend{color:#81c784}
+legend{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#800020;padding:0 6px;font-weight:700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) legend,:root:not([data-theme="light"]) fieldset.secfs legend,:root:not([data-theme="light"]) fieldset.odfs legend{color:#e8899f}}
+:root[data-theme="dark"] legend,:root[data-theme="dark"] fieldset.secfs legend,:root[data-theme="dark"] fieldset.odfs legend{color:#e8899f}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 12px}
 .grid .wide{grid-column:1/-1}
 label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
@@ -143,6 +143,8 @@ label.f input,label.f select,label.f textarea{padding:8px 9px;border:1px solid v
 .pl a:hover{text-decoration:underline}
 .secbtn{margin-left:6px;padding:1px 8px;font-size:11px}
 fieldset.sec-hidden>.grid{display:none}
+fieldset.col-closed>*:not(legend){display:none}
+.secbtn[data-sectoggle],#ntHide,#prHide{display:none}
 .cno{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:500;vertical-align:1px}
 label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var(--accent)}
 .app{border:1px solid var(--line);border-radius:7px;padding:10px;margin-bottom:10px;background:var(--surface2)}
@@ -269,9 +271,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 10:18";</script>
-<script src="config.js?v=202611061018"></script>
-<script src="sync.js?v=202611061018"></script>
+<script>window.MD_BUILD="2026-11-06 10:31";</script>
+<script src="config.js?v=202611061031"></script>
+<script src="sync.js?v=202611061031"></script>
 <script>
 (function(){
 'use strict';
@@ -299,7 +301,7 @@ function fd(s){return s?pd(s).toLocaleDateString('en-GB',{day:'numeric',month:'s
 function rel(s){var n=diff(s);if(n===0)return 'today';if(n===1)return 'tomorrow';if(n===-1)return 'yesterday';return n>0?'in '+n+' days':Math.abs(n)+' days ago'}
 function uid(){return Math.random().toString(36).slice(2,9)}
 var protHidden=false,protAll=false,prDraft='';
-try{protHidden=localStorage.getItem('protHidden')==='1'}catch(e){}
+
 function protFs(c){
   var ps=(c.protection||[]).slice().sort(function(a,b){return b.ts-a.ts});
   return '<fieldset style="margin-top:14px"><legend>Protection ('+ps.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="prHide">'+(protHidden?'Show protection':'Hide protection')+'</button></div>'+
@@ -658,7 +660,7 @@ function openDrawer(id,draft){
    '<div id="live"></div>'+
   '</form>'+
   '<div class="df"><div>'+(id?'<button type="button" class="btn danger" id="delBtn">Delete case</button><span class="muted" id="autoMsg" style="font-size:12px;margin-left:10px">Auto-save on (every 5 seconds)</span>':'')+'</div><div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn" id="saveBtn">Save case</button></div></div></div>';
-  renderLive();
+  colOpen={};renderLive();
   var first=$('#drawer [data-a="name"]');if(first&&!id)first.focus();
   ntDraft=(id&&c.noteDraft)||'';prDraft=(id&&c.protDraft)||'';lastND=ntDraft;lastPD=prDraft;renderLive();
   lastAuto=id?JSON.stringify(collectForm()):null;
@@ -849,9 +851,24 @@ function noteItem(n,list,suffix,fmt){
     return '<div class="note"><small>'+head+'</small><textarea id="ntEdit" class="nbb" style="min-height:140px" aria-label="Edit note">'+esc(n.text||'')+'</textarea><div class="add"><button type="button" class="btn" id="ntEditSave">Save changes</button><button type="button" class="btn ghost" id="ntEditCancel">Cancel</button></div>'+tblBlock(n,list)+'</div>';
   return '<div class="note"><small>'+head+' <button type="button" class="btn ghost sm" data-nedit="'+list+'|'+n.ts+'" style="margin-left:8px">Edit</button></small>'+fmt(n.text)+tblBlock(n,list)+'</div>';
 }
+var colOpen={};
+function decorateSecs(){
+  var f=document.getElementById('caseForm');if(!f)return;
+  var fs=f.querySelectorAll('fieldset');
+  for(var i=0;i<fs.length;i++){
+    var x=fs[i],lg=x.querySelector(':scope>legend');if(!lg||lg.querySelector('.colbtn'))continue;
+    var t=(lg.firstChild&&lg.firstChild.nodeType===3?lg.firstChild.nodeValue:lg.textContent).replace(/\(\d+\)/,'').trim().toLowerCase();
+    if(t.indexOf('applicants')===0)continue;
+    if(x.id==='pickClient'||x.querySelector('#pickSel,#pcSel'))continue;
+    x.setAttribute('data-col',t);
+    var open=!!colOpen[t];x.classList.toggle('col-closed',!open);
+    var b=document.createElement('button');b.type='button';b.className='btn ghost sm secbtn colbtn';b.setAttribute('data-coltoggle',t);b.textContent=open?'Hide':'Show';
+    lg.appendChild(document.createTextNode(' '));lg.appendChild(b);
+  }
+}
 function renderLive(){
   var box=$('#live');if(!box)return;
-  if(!openId){var nb0=$('#liveNotes');if(nb0)nb0.innerHTML='';box.innerHTML='<fieldset><legend>Tasks and notes</legend><span class="muted">Save the case first, then add tasks and file notes here.</span></fieldset>';return}
+  if(!openId){var nb0=$('#liveNotes');if(nb0)nb0.innerHTML='';box.innerHTML='<fieldset><legend>Tasks and notes</legend><span class="muted">Save the case first, then add tasks and file notes here.</span></fieldset>';decorateSecs();return}
   var c=currentCase();if(!c)return;
   var ts=(c.tasks||[]).slice().sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(tkKey(a)<tkKey(b)?-1:tkKey(a)>tkKey(b)?1:0)});
   var ns=(c.notes||[]).slice().sort(function(a,b){return b.ts-a.ts});
@@ -862,12 +879,13 @@ function renderLive(){
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
     (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
     (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset><div style="margin-top:14px">'+tasksHtml+'</div>';
+  decorateSecs();
 }
 var secHidden={};
-try{secHidden=JSON.parse(localStorage.getItem('secHidden')||'{}')||{}}catch(e){secHidden={}}
+
 function secFs(k,title){return '<fieldset data-sec="'+k+'"'+(secHidden[k]?' class="sec-hidden"':'')+'><legend>'+title+' <button type="button" class="btn ghost sm secbtn" data-sectoggle="'+k+'">'+(secHidden[k]?'Show':'Hide')+'</button></legend><div class="grid">'}
 var notesHidden=false,notesAll=false,ntDraft='';
-try{notesHidden=localStorage.getItem('notesHidden')==='1'}catch(e){}
+
 function stampOf(ts){return new Date(ts).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 
 function collectForm(){
@@ -1101,6 +1119,8 @@ function backupAll(){
 
 /* ---------- events ---------- */
 document.addEventListener('click',function(e){
+  var cb=e.target.closest&&e.target.closest('[data-coltoggle]');
+  if(cb){var ck=cb.getAttribute('data-coltoggle'),cf=cb.closest('fieldset');colOpen[ck]=!colOpen[ck];cf.classList.toggle('col-closed',!colOpen[ck]);cb.textContent=colOpen[ck]?'Hide':'Show';cb.blur();return}
   var sb=e.target.closest&&e.target.closest('[data-sectoggle]');
   if(sb){var k=sb.getAttribute('data-sectoggle'),fs=sb.closest('fieldset');secHidden[k]=!secHidden[k];
     fs.classList.toggle('sec-hidden',!!secHidden[k]);sb.textContent=secHidden[k]?'Show':'Hide';
