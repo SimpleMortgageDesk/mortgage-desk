@@ -144,6 +144,16 @@ label.f input,label.f select,label.f textarea{padding:8px 9px;border:1px solid v
 .pl a:hover{text-decoration:underline}
 .secbtn{margin-left:6px;padding:1px 8px;font-size:11px}
 fieldset.sec-hidden>.grid{display:none}
+fieldset[data-col]{--sc:#8a8f94;background:color-mix(in srgb,var(--sc) 9%,var(--surface));border-color:color-mix(in srgb,var(--sc) 38%,var(--line))}
+fieldset[data-col] legend{border-bottom-color:color-mix(in srgb,var(--sc) 38%,var(--line))}
+fieldset[data-col="applicants"]{--sc:#a68a4b}
+fieldset[data-col="notes"]{--sc:#c9971c}
+fieldset[data-col="tasks"]{--sc:#4f9a3c}
+fieldset[data-col="case"]{--sc:#7a5fc0}
+fieldset[data-col="lender"]{--sc:#d0634f}
+fieldset[data-col="protection"]{--sc:#c0507e}
+fieldset.secfs[data-col]{--sc:#00897b}
+fieldset.odfs[data-col]{--sc:#0078d4}
 fieldset.col-closed>*:not(legend){display:none}
 .dhb .btn{white-space:nowrap}
 .secbtn[data-sectoggle],#ntHide,#prHide{display:none}
@@ -273,9 +283,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 11:04";</script>
-<script src="config.js?v=202611061104"></script>
-<script src="sync.js?v=202611061104"></script>
+<script>window.MD_BUILD="2026-11-06 11:12";</script>
+<script src="config.js?v=202611061112"></script>
+<script src="sync.js?v=202611061112"></script>
 <script>
 (function(){
 'use strict';
@@ -860,7 +870,7 @@ function decorateSecs(){
   for(var i=0;i<fs.length;i++){
     var x=fs[i],lg=x.querySelector(':scope>legend');if(!lg||lg.querySelector('.colbtn'))continue;
     var t=(lg.firstChild&&lg.firstChild.nodeType===3?lg.firstChild.nodeValue:lg.textContent).replace(/\(\d+\)/,'').trim().toLowerCase();
-    if(t.indexOf('applicants')===0)continue;
+    if(t.indexOf('applicants')===0){x.setAttribute('data-col','applicants');continue}
     if(x.id==='pickClient'||x.querySelector('#pickSel,#pcSel'))continue;
     x.setAttribute('data-col',t);
     var open=!!colOpen[t];x.classList.toggle('col-closed',!open);
