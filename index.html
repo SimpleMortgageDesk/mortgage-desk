@@ -349,9 +349,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-07 15:36";</script>
-<script src="config.js?v=202611071536"></script>
-<script src="sync.js?v=202611071536"></script>
+<script>window.MD_BUILD="2026-11-07 15:41";</script>
+<script src="config.js?v=202611071541"></script>
+<script src="sync.js?v=202611071541"></script>
 <script>
 (function(){
 'use strict';
@@ -1138,7 +1138,7 @@ function renderTray(){
   box.innerHTML=h;
 }
 function taskShell(){
-  return '<div class="tadd"><input type="text" id="trNewText" class="wide2" placeholder="New task, e.g. chase conveyancer" aria-label="New task"><input type="text" id="trNewCase" list="trCases" placeholder="Client (name or C number)" aria-label="Client"><datalist id="trCases"></datalist><input type="date" id="trNewDue" aria-label="Due date"><input type="time" id="trNewTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="trNewPri"> High priority</label><button type="button" class="btn wide2" id="trAdd">Add task</button></div><input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
+  return '<input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
 }
 function openTray(){
   trayOpen=true;var t=$('#tray');t.hidden=false;
