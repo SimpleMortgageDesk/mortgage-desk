@@ -151,9 +151,19 @@ fieldset[data-col="notes"]{--sc:#c9971c}
 fieldset[data-col="tasks"]{--sc:#4f9a3c}
 fieldset[data-col="case"]{--sc:#7a5fc0}
 fieldset[data-col="lender"]{--sc:#d0634f}
-fieldset[data-col="protection"]{--sc:#c0507e}
+fieldset[data-col="protection notes"]{--sc:#c0507e}
 fieldset.secfs[data-col]{--sc:#00897b}
 fieldset.odfs[data-col]{--sc:#0078d4}
+.ig{position:relative;display:block}
+.ig i{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--muted);pointer-events:none;font-size:14px}
+label.f .ig input{padding-left:22px}
+.pcbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.pcbar input{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:14px;width:200px;max-width:100%}
+.pcres{font-size:12px}
+#sideAcct{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:12px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+#sideAcct #settingsBtn{flex:1 1 100%}
+#sideAcct #logoutBtn,#sideAcct #backupBtn{flex:1 1 40%}
+#sideAcct #syncState{flex:1 1 100%;margin:0 !important;font-size:12px;white-space:normal !important}
 fieldset.col-closed>*:not(legend){display:none}
 .prichk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#8c1d18;font-weight:600;white-space:nowrap}
 .prichk input{accent-color:#b3261e;width:15px;height:15px}
@@ -306,22 +316,22 @@ table.nt th{font-weight:600;background:var(--surface2)}
     <input id="q" class="search" type="search" placeholder="Search clients, address, reference" aria-label="Search cases">
     <button class="btn ghost" id="sideBtn" data-sidetoggle="1" title="Show or hide the task bar on the left">Task bar</button><button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="logoutBtn">Log out</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files"><button class="btn" id="newBtn">New case</button>
   </div></header>
-  <aside id="side" aria-label="Task bar"></aside>
+  <aside id="side" aria-label="Task bar"><div id="sideAcct"></div><div id="sideTasks"></div></aside>
   <main class="gut" id="view"></main>
 </div>
 <div id="drawer" hidden></div>
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-06 11:45";</script>
-<script src="config.js?v=202611061145"></script>
-<script src="sync.js?v=202611061145"></script>
+<script>window.MD_BUILD="2026-11-07 06:31";</script>
+<script src="config.js?v=202611070631"></script>
+<script src="sync.js?v=202611070631"></script>
 <script>
 (function(){
 'use strict';
 var STAGES=[
-  {id:'enquiry',label:'Enquiry'},{id:'factfind',label:'Fact find'},{id:'dip',label:'DIP'},
-  {id:'application',label:'Application'},{id:'offer',label:'Offer'},{id:'completed',label:'Completed'}];
+  {id:'enquiry',label:'Enquiry'},{id:'factfind',label:'Fact find'},{id:'dip',label:'AIP'},
+  {id:'application',label:'FMA'},{id:'offer',label:'Offered'},{id:'completed',label:'Completed'}];
 var STAGE_LABEL={lost:'Closed lost'}; STAGES.forEach(function(s){STAGE_LABEL[s.id]=s.label});
 var TYPES=['Purchase','First-time buyer','Remortgage','Product transfer','Further advance','Buy to let','Other'];
 
@@ -337,7 +347,8 @@ function pd(iso){if(!iso)return null;var p=iso.split('-').map(Number);return new
 var TODAY=(function(){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())})();
 function diff(iso){return Math.round((pd(iso)-TODAY)/864e5)}
 function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
-function addMonths(s,n){var d=pd(s);d.setMonth(d.getMonth()+n);return iso(d)}
+function addMonths(s,n){var d=pd(s),day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+n);var last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last));return iso(d)}
+var REVM=4;
 function addDays(s,n){var d=pd(s);d.setDate(d.getDate()+n);return iso(d)}
 function fd(s){return s?pd(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—'}
 function rel(s){var n=diff(s);if(n===0)return 'today';if(n===1)return 'tomorrow';if(n===-1)return 'yesterday';return n>0?'in '+n+' days':Math.abs(n)+' days ago'}
@@ -346,7 +357,7 @@ var protHidden=false,protAll=false,prDraft='';
 
 function protFs(c){
   var ps=(c.protection||[]).slice().sort(function(a,b){return b.ts-a.ts});
-  return '<fieldset style="margin-top:14px"><legend>Protection ('+ps.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="prHide">'+(protHidden?'Show protection':'Hide protection')+'</button></div>'+
+  return '<fieldset style="margin-top:14px"><legend>Protection notes ('+ps.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="prHide">'+(protHidden?'Show protection':'Hide protection')+'</button></div>'+
   (protHidden?'<span class="muted">Protection notes hidden.</span>':'<label class="f">New protection note<textarea id="prText" rows="3" placeholder="Life cover, critical illness, income protection, buildings and contents: provider, cover, premium, review date">'+esc(prDraft)+'</textarea></label><div id="prTblBox">'+pendHtml('pr')+'</div><div class="add"><button type="button" class="btn ghost" id="prStamp">Insert date and time</button><button type="button" class="btn ghost" id="prAdd">Add note</button></div>'+
   (protAll?ps:ps.slice(0,1)).map(function(n){return noteItem(n,'protection',(protAll||ps.length<2?'':' (latest)'),esc)}).join('')+
   (ps.length>1?'<button type="button" class="btn ghost sm" id="prAll">'+(protAll?'Show latest only':'Show all '+ps.length+' protection notes')+'</button>':''))+'</fieldset>';
@@ -355,15 +366,11 @@ function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function
 function cno(c){return c.clientNo?' <span class="cno">'+esc(c.clientNo)+'</span>':''}
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
-function ownReview(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-6):'')}
-function secReview(x){return x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-6):'')}
-function reviewItems(c){
-  var secs=c.securities||[];
-  if(secs.length){var out=[];secs.forEach(function(x){var d=secReview(x);if(d)out.push({date:d,addr:x.address||'Security address',lender:x.lender||'',fixedUntil:x.fixedUntil||'',sec:true})});return out}
-  var d=ownReview(c);return d?[{date:d,addr:'',lender:'',fixedUntil:c.fixedUntil||'',sec:false}]:[];
-}
+function ownReview(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-REVM):'')}
+function secReview(x){return x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-REVM):'')}
+function reviewItems(c){var d=ownReview(c);return d?[{date:d,addr:'',lender:'',fixedUntil:c.fixedUntil||'',sec:false}]:[]}
 function reviewOf(c){var r=reviewItems(c).map(function(x){return x.date}).sort();return r[0]||''}
-function rateEndOf(c){var secs=c.securities||[];if(secs.length){var r=secs.map(function(x){return x.fixedUntil}).filter(Boolean).sort();return r[0]||''}return c.fixedUntil||''}
+function rateEndOf(c){return c.fixedUntil||''}
 function firstName(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim()}).filter(Boolean)[0]||'';return a.replace(/^(mr|mrs|miss|ms|dr)\.?\s+/i,'').toLowerCase()}
 function cnum(c){var m=/(\d+)/.exec(c.clientNo||'');return m?+m[1]:1e9}
 function odLink(u){u=String(u||'').trim();return /^https?:\/\//i.test(u)?'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open OneDrive folder</a>':''}
@@ -534,7 +541,7 @@ function render(){
   var v=$('#view');
   if(!db){v.innerHTML='<div class="banner">Saving is not available in this view, so cases cannot be stored. Open the page from your artifact link while signed in.</div>';return}
   if(!loaded){v.innerHTML='<div class="empty">Loading your cases…</div>';return}
-  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="pagehead"><h1>Tasks</h1><span class="muted">Soonest due first, overdue at the top</span></div><div id="bdBanner"></div><div class="tpage">'+taskShell()+'</div>'}renderTray()}
+  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div id="bdBanner"></div><div class="tpage">'+taskShell()+'</div>'}renderTray()}
   else if(view==='notebook'){if(!$('#nbMain')||!v.contains($('#nbMain'))){v.innerHTML=nbShell();nbShown=null}renderNotebook()}
   else if(view==='birthdays'){if(!$('#bdList')||!v.contains($('#bdList'))){v.innerHTML=bdShell();bdTplRender()}bdRender()}
   else if(view==='appointments')v.innerHTML=apHTML();
@@ -616,7 +623,14 @@ function remindersHTML(){
 /* ---------- drawer ---------- */
 function fld(name,label,val,type,extra){
   type=type||'text';
-  return '<label class="f'+(extra&&extra.wide?' wide':'')+'">'+label+'<input id="f-'+name+'" data-f="'+name+'" type="'+type+'" value="'+esc(val==null?'':val)+'"'+(type==='number'?' step="any" inputmode="decimal"':'')+'></label>';
+  var inp='<input id="f-'+name+'" data-f="'+name+'" type="'+type+'" value="'+esc(val==null?'':val)+'"'+(type==='number'?' step="any" inputmode="decimal"':'')+'>';
+  if(extra&&extra.gbp)inp='<span class="ig"><i>£</i>'+inp+'</span>';
+  return '<label class="f'+(extra&&extra.wide?' wide':'')+'">'+label+inp+'</label>';
+}
+function stageOpts(cur){
+  var o=[['dip','AIP'],['application','FMA'],['offer','Offered'],['completed','Completed'],['lost','Closed lost']];
+  if(cur==='enquiry')o.unshift(['enquiry','Enquiry']);if(cur==='factfind')o.unshift(['factfind','Fact find']);
+  return o;
 }
 function sel(name,label,val,opts){
   return '<label class="f">'+label+'<select id="f-'+name+'" data-f="'+name+'">'+opts.map(function(o){var v=o[0],l=o[1];return '<option value="'+esc(v)+'"'+(v===val?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></label>';
@@ -631,23 +645,31 @@ function plinks(p){
   return '<a href="https://wa.me/'+intl+'" target="_blank" rel="noopener">WhatsApp</a>';
 }
 var secCollapsed={};
-function secSumText(x){var rv=x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-6):'');var parts=[x.lender,x.rate?x.rate+'%':'',rv?'Review '+fd(rv):''].filter(Boolean);return parts.join(' · ')||'No lender details yet'}
+function secSumText(x){var rv=x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-REVM):'');var parts=[x.lender,x.rate?x.rate+'%':'',rv?'Review '+fd(rv):''].filter(Boolean);return parts.join(' · ')||'No lender details yet'}
 function secRow(x,i){
   x=x||{};var sid=x.id||('s'+Math.random().toString(36).slice(2,9));
-  var coll=secCollapsed[sid]!==undefined?secCollapsed[sid]:!!(x.lender||x.fixedUntil||x.reviewDate);
-  var f=function(k,l,t,ex){var v=x[k];return '<label class="f'+(ex||'')+'">'+l+'<input data-s="'+k+'"'+(t?' type="'+t+'"':'')+(t==='number'?' step="any" inputmode="decimal"':'')+' value="'+esc(v==null?'':v)+'"></label>'};
-  var rv=secReview(x);
-  return '<div class="sec2'+(coll?' sec2-collapsed':'')+'" data-sid="'+sid+'"><div class="top2"><span>Security address '+(i+1)+'</span><span><button type="button" class="btn ghost sm" data-sectog="'+sid+'">'+(coll?'Show lender details':'Hide lender details')+'</button> <button type="button" class="btn ghost sm" data-rmsec="'+sid+'">Remove</button></span></div>'+
-   '<div class="grid"><label class="f wide">Security address<input data-s="address" value="'+esc(x.address)+'" placeholder="Address of the property the mortgage is secured on"></label></div>'+
-   '<div class="secsum muted">'+esc(secSumText(x))+'</div>'+
-   '<div class="sgrid"><div class="grid">'+f('lender','Lender')+f('lenderRef','Lender reference / roll number')+f('product','Product code')+f('rate','Initial rate (%)','number')+f('fixedUntil','Initial rate ends','date')+
-   '<label class="f">Mortgage review date (you can change it; blank follows 6 months before rate end)<input data-s="reviewDate" type="date" data-auto="'+(x.reviewDate?'0':'1')+'" value="'+esc(rv)+'"></label>'+
-   f('followOnRate','Rate after (%)','number')+f('monthlyPayment','Monthly payment (£)','number')+f('loanAmount','Loan amount (£)','number')+f('erc','Early repayment charge')+f('mortgageExpiry','Mortgage expiry (end of term)','date')+'</div></div></div>';
+  return '<div class="sec2" data-sid="'+sid+'"><div class="top2"><span>Security address '+(i+1)+'</span><span><button type="button" class="btn ghost sm" data-rmsec="'+sid+'">Remove</button></span></div>'+
+   '<div class="grid"><label class="f wide">Security address<input data-s="address" value="'+esc(x.address)+'" placeholder="House number and street. Then use the postcode search below"></label></div>'+
+   '<div class="pcbar"><input data-pc type="text" placeholder="UK postcode, e.g. B19 1AA" aria-label="Postcode search" autocomplete="off"><button type="button" class="btn ghost sm" data-pcfind>Find postcode</button><span class="pcres muted"></span></div></div>';
 }
-function updSRev(){var el=$('#sRev');if(!el)return;var cards=document.querySelectorAll('#secs .sec2'),v='';
-  if(cards.length){var ds=[];cards.forEach(function(cd){var r=cd.querySelector('[data-s="reviewDate"]'),fu=cd.querySelector('[data-s="fixedUntil"]'),d=(r&&r.value)||(fu&&fu.value?addMonths(fu.value,-6):'');if(d)ds.push(d)});v=ds.sort()[0]||''}
-  else{var o=$('#f-reviewDate');v=o?o.value:''}
-  el.textContent=v?fd(v):'—'}
+function ukPc(s){s=String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(s.length<5||s.length>7)return '';return s.slice(0,-3)+' '+s.slice(-3)}
+function pcFind(btn){
+  var card=btn.closest('.sec2'),inp=card.querySelector('[data-pc]'),out=card.querySelector('.pcres'),pc=ukPc(inp.value);
+  if(!pc){out.textContent='Enter a full UK postcode';return}
+  out.textContent='Searching…';
+  fetch('https://api.postcodes.io/postcodes/'+encodeURIComponent(pc)).then(function(r){return r.json()}).then(function(j){
+    if(!j||j.status!==200||!j.result){out.textContent='Postcode not found. Check it and try again.';return}
+    var r=j.result,town=r.admin_district||r.parish||'';
+    out.textContent=r.postcode+' · '+[r.admin_ward,r.admin_district,r.region||r.country].filter(Boolean).join(', ');
+    var ad=card.querySelector('[data-s="address"]'),cur=ad.value.trim();
+    if(cur.toUpperCase().replace(/[^A-Z0-9]/g,'').indexOf(r.postcode.replace(' ',''))<0){
+      ad.value=(cur?cur.replace(/[,\s]+$/,'')+', ':'')+(town?town+', ':'')+r.postcode;
+      ad.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    inp.value=r.postcode;
+  }).catch(function(){out.textContent='Could not reach the postcode service. Check your connection.'});
+}
+function updSRev(){var el=$('#sRev');if(!el)return;var o=$('#f-reviewDate'),v=o?o.value:'';el.textContent=v?fd(v):'—'}
 function appRow(a,i){
   a=a||{};
   return '<div class="app" data-app="'+i+'"><div class="top2"><span>Applicant '+(i+1)+'</span><button type="button" class="btn ghost sm" data-rmapp="'+i+'">Remove</button></div><div class="grid">'+
@@ -665,14 +687,14 @@ function pickClient(){
 }
 function startFrom(src){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
-  var d={stage:'enquiry',type:'Purchase',repayment:'repayment',applicants:ap,oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'New case for an existing client: another property for '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+'.'}]};
+  var d={stage:'dip',type:'Purchase',repayment:'repayment',applicants:ap,oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'New case for an existing client: another property for '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+'.'}]};
   closeDrawer();openDrawer(null,d);
 }
 function openDrawer(id,draft){
   openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;editTk=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
   var c=id?cases.filter(function(x){return x.id===id})[0]:null;
   if(id&&!c){openId=undefined;return}
-  c=c||Object.assign({stage:'enquiry',type:'Purchase',repayment:'repayment',applicants:[{}]},draft||{});
+  c=c||Object.assign({stage:'dip',type:'Purchase',repayment:'repayment',applicants:[{}]},draft||{});
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
@@ -680,26 +702,31 @@ function openDrawer(id,draft){
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button></fieldset>'+
-   '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add each property that has its own mortgage. The next review date and the reminders are taken from these.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
-   '<fieldset class="odfs"><legend>OneDrive folder</legend><label class="f">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
-   '<div id="liveNotes"></div>'+
-   '<fieldset><legend>Case</legend><div class="grid">'+
-     fld('clientNo','Client number',c.clientNo)+
-     sel('stage','Stage',c.stage,STAGES.map(function(s){return [s.id,s.label]}).concat([['lost','Closed lost']]))+
-     sel('type','Type',c.type,TYPES.map(function(t){return [t,t]}))+
-     fld('propertyAddress','Property address',c.propertyAddress,'text',{wide:1})+
-     fld('purchasePrice','Purchase price (£)',c.purchasePrice,'number')+
-     fld('propertyValue','Valuation (£)',c.propertyValue,'number')+
-     fld('loanAmount','Loan amount (£)',c.loanAmount,'number')+
-     fld('termYears','Term (years)',c.termYears,'number')+
-     sel('repayment','Repayment method',c.repayment,[['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']])+
-   '</div></fieldset>'+
+   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></fieldset>'+
+   '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add the address of each property the mortgage is secured on.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
    secFs('lender','Lender')+
-     fld('lender','Lender name',c.lender)+fld('fixedUntil','Initial deal ends',c.fixedUntil,'date')+
-     fld('lenderRef','Lender reference / roll number',c.lenderRef)+'<label class="f">Mortgage review date (six months before the initial deal ends. You can change it)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(ownReview(c))+'"></label>'+
+     fld('lender','Lender name',c.lender)+
+     sel('stage','Stage',c.stage,stageOpts(c.stage))+
+     sel('type','Type',c.type,TYPES.map(function(t){return [t,t]}))+
+     sel('repayment','Repayment method',c.repayment,[['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']])+
+     fld('propertyAddress','Property address',c.propertyAddress,'text',{wide:1})+
+     fld('purchasePrice','Purchase price',c.purchasePrice,'number',{gbp:1})+
+     fld('propertyValue','Valuation',c.propertyValue,'number',{gbp:1})+
+     fld('loanAmount','Loan amount',c.loanAmount,'number',{gbp:1})+
+     fld('monthlyPayment','Monthly payment',c.monthlyPayment,'number',{gbp:1})+
+     fld('termYears','Initial term (years)',c.termYears,'number')+
+     fld('termLeft','Term left (years)',c.termLeft,'number')+
+     fld('product','Product code',c.product)+
+     fld('rate','Initial rate (%)',c.rate,'number')+
+     fld('followOnRate','Rate after (%)',c.followOnRate,'number')+
+     fld('erc','Early repayment charge',c.erc)+
+     fld('fixedUntil','Initial deal ends',c.fixedUntil,'date')+
+     '<label class="f">Mortgage review date (4 months before the initial deal ends. You can change it)<input id="f-reviewDate" data-f="reviewDate" type="date" data-auto="'+(c.reviewDate?'0':'1')+'" value="'+esc(ownReview(c))+'"></label>'+
+     fld('lenderRef','Lender reference / roll number',c.lenderRef)+
    '</div></fieldset>'+
+   '<div id="liveNotes"></div>'+
    '<div id="live"></div>'+
+   '<fieldset class="odfs"><legend>OneDrive folder</legend><label class="f">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
   '</form>'+
   '<div class="df"><div>'+(id?'<button type="button" class="btn danger" id="delBtn">Delete case</button><span class="muted" id="autoMsg" style="font-size:12px;margin-left:10px">Auto-save on (every 5 seconds)</span>':'')+'</div><div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn" id="saveBtn">Save case</button></div></div></div>';
   colOpen={};renderLive();
@@ -918,9 +945,9 @@ function renderLive(){
     (ts.length?ts.map(function(t){var tk0=c.id+'|'+t.id;if(editTk===tk0)return '<div class="task">'+tkEditor(tk0,t)+'</div>';return '<div class="task'+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-tk="'+t.id+'"'+(t.done?' checked':'')+' aria-label="Done"><span class="t">'+esc(t.text)+'</span>'+(t.created?'<span class="muted" style="font-size:11px;white-space:nowrap">Added '+shortStamp(t.created)+'</span>':'')+(t.due?'<span class="chip '+(t.done?'':tone(t.due))+'">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</span>':'')+'<button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+tk0+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+tk0+'">Edit</button><button type="button" class="x" data-rmtk=""'+t.id+'" aria-label="Delete task">×</button></div>'}).join(''):'<span class="muted">No tasks yet.</span>')+
     '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="tkPri"> High priority</label><button type="button" class="btn ghost" id="tkAdd">Add task</button></div></fieldset>';
   box.innerHTML=protFs(c);
-  var nb=$('#liveNotes');if(nb)nb.innerHTML='<fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
+  var nb=$('#liveNotes');if(nb)nb.innerHTML='<div style="margin-bottom:14px">'+tasksHtml+'</div><fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
     (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
-    (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset><div style="margin-top:14px">'+tasksHtml+'</div>';
+    (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset>';
   decorateSecs();
 }
 var secHidden={};
@@ -941,13 +968,13 @@ function collectForm(){
     var a={};row.querySelectorAll('[data-a]').forEach(function(i){a[i.getAttribute('data-a')]=i.value.trim()});
     if(Object.keys(a).some(function(k){return a[k]}))o.applicants.push(a);
   });
-  var auto=o.fixedUntil?addMonths(o.fixedUntil,-6):'';
+  var auto=o.fixedUntil?addMonths(o.fixedUntil,-REVM):'';
   if(o.reviewDate===auto)o.reviewDate='';
   o.securities=[];
   document.querySelectorAll('#secs .sec2').forEach(function(card){
-    var x={id:card.getAttribute('data-sid')};
+    var sid0=card.getAttribute('data-sid'),old0=((currentCase()||{}).securities||[]).filter(function(q){return q.id===sid0})[0]||{};var x=Object.assign({},old0,{id:sid0});
     card.querySelectorAll('[data-s]').forEach(function(i){var k=i.getAttribute('data-s');x[k]=i.type==='number'?num(i.value):i.value.trim()});
-    var a2=x.fixedUntil?addMonths(x.fixedUntil,-6):'';if(x.reviewDate===a2)x.reviewDate='';
+    var a2=x.fixedUntil?addMonths(x.fixedUntil,-REVM):'';if(x.reviewDate===a2)x.reviewDate='';
     var has=['address','lender','lenderRef','product','fixedUntil','reviewDate','erc','mortgageExpiry','rate','followOnRate','monthlyPayment','loanAmount'].some(function(k){return x[k]});
     if(has)o.securities.push(x);
   });
@@ -990,20 +1017,34 @@ function trItem(x){
   if(editTk===k)return '<div class="tt"><div class="tm">'+tkEditor(k,t)+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div></div></div>';
   return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+(t.pri&&!t.done?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+k+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
 }
-var sideOn=true;try{sideOn=localStorage.getItem('sideOn')!=='0'}catch(e){}
-function applySide(){document.body.classList.toggle('side-on',sideOn);var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
+var sideOn=true;
+var mqSide=window.matchMedia('(min-width:1000px)');
+function placeAcct(){
+  var acc=$('#sideAcct'),top=document.querySelector('header.top .in');if(!acc||!top)return;
+  var g=function(i){return document.getElementById(i)},se=g('settingsBtn'),lo=g('logoutBtn'),bk=g('backupBtn'),st=g('syncState');
+  if(sideOn&&mqSide.matches){[se,lo,bk,st].forEach(function(e){if(e&&e.parentNode!==acc)acc.appendChild(e)})}
+  else{
+    if(bk&&bk.parentNode===acc)top.insertBefore(bk,g('pdfBtn'));
+    if(st&&st.parentNode===acc)top.insertBefore(st,g('backupBtn'));
+    if(se&&se.parentNode===acc)top.appendChild(se);
+    if(lo&&lo.parentNode===acc)top.appendChild(lo);
+  }
+}
+try{sideOn=localStorage.getItem('sideOn')!=='0'}catch(e){}
+function applySide(){document.body.classList.toggle('side-on',sideOn);placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
+if(mqSide.addEventListener)mqSide.addEventListener('change',function(){applySide()});
 window.addEventListener('resize',function(){var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
 function sideItem(x,b){
   var c=x.c,t=x.t,k=c.id+'|'+t.id;
   return '<div class="si'+(t.pri?' pri':'')+(b==='over'?' over':'')+'"><input type="checkbox" data-trk="'+k+'" aria-label="Mark done"><div style="min-width:0"><button type="button" class="lnk st" data-open="'+c.id+'">'+(t.pri?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</button><div class="sc">'+esc(names(c))+cno(c)+'</div>'+(t.due?'<div class="sd">'+fd(t.due)+(t.time?' · '+esc(t.time):'')+'</div>':'')+'</div></div>';
 }
 function renderSide(){
-  var s=$('#side');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
+  var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var open=allTasks().filter(function(x){return !x.t.done}).sort(function(a,b){var da=tkKey(a.t),db3=tkKey(b.t);return da<db3?-1:da>db3?1:0});
   var h='<div class="sh"><b>Task bar</b><span class="muted" style="font-size:12px">'+open.length+' open</span><button type="button" class="btn ghost sm" data-sidetoggle="1">Hide</button></div>';
   var pri=open.filter(function(x){return x.t.pri});
   if(pri.length)h+='<div class="sg prh">High priority · '+pri.length+'</div>'+pri.map(function(x){return sideItem(x,trBucket(x))}).join('');
-  [['over','Overdue'],['today','Due today'],['week','Next 7 days'],['later','Later'],['none','No due date']].forEach(function(g){
+  [['today','Due today'],['over','Overdue'],['week','Next 7 days'],['later','Later'],['none','No due date']].forEach(function(g){
     var gi=open.filter(function(x){return !x.t.pri&&trBucket(x)===g[0]});
     if(gi.length)h+='<div class="sg'+(g[0]==='over'?' bad':'')+'">'+g[1]+' · '+gi.length+'</div>'+gi.map(function(x){return sideItem(x,g[0])}).join('');
   });
@@ -1032,7 +1073,7 @@ function renderTray(){
     return true});
   items.sort(function(a,b){var da=tkKey(a.t),db2=tkKey(b.t);return da<db2?-1:da>db2?1:((a.t.created||0)-(b.t.created||0))||(cnum(a.c)-cnum(b.c))});
   if(!items.length){box.innerHTML='<div class="empty">Nothing here.</div>';return}
-  var order=['pri','over','today','week','later','none','done'],h='';
+  var order=['pri','today','over','week','later','none','done'],h='';
   var isP=function(x){return !x.t.done&&!!x.t.pri};
   order.forEach(function(g){
     var gi=items.filter(function(x){return g==='pri'?isP(x):(!isP(x)&&trBucket(x)===g)});
@@ -1211,6 +1252,7 @@ document.addEventListener('click',function(e){
   if(t.closest('[data-close]')){closeDrawer();return}
   if(t.id==='saveBtn'){saveCase();return}
   if(t.id==='addApp'){var n=document.querySelectorAll('#apps .app').length;$('#apps').insertAdjacentHTML('beforeend',appRow({},n));return}
+  var pcb=t.closest&&t.closest('[data-pcfind]');if(pcb){pcFind(pcb);return}
   if(t.id==='addSec'){var sn=document.querySelectorAll('#secs .sec2').length;$('#secs').insertAdjacentHTML('beforeend',secRow({},sn));var na=$('#secs .sec2:last-child [data-s="address"]');if(na)na.focus();return}
   var rms=t.closest('[data-rmsec]');
   if(rms){var cd=rms.closest('.sec2');cd.remove();document.querySelectorAll('#secs .sec2').forEach(function(c2,j){var h=c2.querySelector('.top2>span');if(h)h.textContent='Security address '+(j+1)});updSRev();return}
@@ -1354,12 +1396,12 @@ document.addEventListener('input',function(e){
   }
   if(t.getAttribute&&t.getAttribute('data-a')==='email'){var el=t.parentNode.querySelector('.el');if(el)el.innerHTML=elinks(t.value)}
   if(t.getAttribute&&t.getAttribute('data-a')==='phone'){var pl=t.parentNode.querySelector('.pl');if(pl)pl.innerHTML=plinks(t.value)}
-  if(t.id==='f-fixedUntil'){var ri=$('#f-reviewDate');if(ri&&ri.getAttribute('data-auto')==='1'){var rv=t.value?addMonths(t.value,-6):'';ri.value=rv;updSRev()}}
+  if(t.id==='f-fixedUntil'){var ri=$('#f-reviewDate');if(ri){ri.value=t.value?addMonths(t.value,-REVM):'';ri.setAttribute('data-auto','1');updSRev()}}
   if(t.id==='f-reviewDate'){t.setAttribute('data-auto','0');updSRev()}
   if(t.getAttribute&&t.getAttribute('data-s')){
     var scd=t.closest('.sec2'),sk=t.getAttribute('data-s');
     if(scd){
-      if(sk==='fixedUntil'){var sr=scd.querySelector('[data-s="reviewDate"]');if(sr&&sr.getAttribute('data-auto')==='1')sr.value=t.value?addMonths(t.value,-6):''}
+      if(sk==='fixedUntil'){var sr=scd.querySelector('[data-s="reviewDate"]');if(sr&&sr.getAttribute('data-auto')==='1')sr.value=t.value?addMonths(t.value,-REVM):''}
       if(sk==='reviewDate')t.setAttribute('data-auto','0');
       var gv=function(k){var q=scd.querySelector('[data-s="'+k+'"]');return q?q.value.trim():''};
       var sm=scd.querySelector('.secsum');if(sm)sm.textContent=secSumText({lender:gv('lender'),rate:gv('rate'),fixedUntil:gv('fixedUntil'),reviewDate:gv('reviewDate')});
@@ -1376,6 +1418,7 @@ document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&!$('#drawer').hidden)closeDrawer();
   else if(e.key==='Escape'&&trayOpen)closeTray();
   if((e.key==='Enter'||e.key===' ')&&e.target.classList&&e.target.classList.contains('card')){e.preventDefault();openDrawer(e.target.dataset.open)}
+  if(e.key==='Enter'&&e.target.hasAttribute&&e.target.hasAttribute('data-pc')){e.preventDefault();var pb=e.target.closest('.sec2').querySelector('[data-pcfind]');if(pb)pcFind(pb);return}
   if(e.key==='Enter'&&(e.target.id==='tkText')){e.preventDefault();$('#tkAdd').click()}
 });
 /* drag between pipeline stages */
