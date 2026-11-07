@@ -294,8 +294,9 @@
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Account</h2><button class="btn ghost" data-a="close">Close</button></div>' +
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
+        '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="backup" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
         '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Log out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn" data-a="out">Log out</button>' +
@@ -321,6 +322,7 @@
     ov.addEventListener('click', async function (e) {
       var a = e.target.closest && e.target.closest('[data-a]'); if (!a) return; a = a.getAttribute('data-a');
       if (a === 'close') ov.remove();
+      else if (a === 'backup') { var bb = $('backupBtn'); if (bb) bb.click(); }
       else if (a === 'sync') { say('Syncing…'); await flush(); await pull(); say(st.err || (st.offline ? 'Offline. Will retry.' : 'Up to date.')); }
       else if (a === 'folder') { try { var r = await gfetch(APP); var j = await r.json(); if (j.webUrl) window.open(j.webUrl, '_blank'); else say('Folder not created yet.'); } catch (x) { say('Could not reach OneDrive.'); } }
       else if (a === 'out') { ov.remove(); signOut(); }
