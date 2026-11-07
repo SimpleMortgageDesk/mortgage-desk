@@ -272,6 +272,7 @@
     o.innerHTML = html; return o;
   }
   function showSignIn(msg) {
+    if (!msg) { try { if (localStorage.getItem('md.idleMsg')) { localStorage.removeItem('md.idleMsg'); msg = 'You were signed out after ' + idleLabel() + ' of inactivity. Sign in again to continue.'; } } catch (e) {} }
     var bad = !CFG.clientId || /PASTE/i.test(CFG.clientId);
     var o = overlay('<div style="width:min(420px,100%);background:#fff;border:1px solid #D4DBDF;border-radius:12px;padding:28px;box-shadow:0 8px 30px rgba(16,28,38,.12)">' +
       '<div style="font-weight:700;font-size:20px;margin-bottom:6px">&#9670; Mortgage Desk</div>' +
@@ -297,7 +298,7 @@
         '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
         '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
-        '<h3 style="margin:18px 0 6px;font-size:15px">Sign out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn ghost" data-a="out">Sign out of this device</button>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Log out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn" data-a="out">Log out</button>' +
         '<p style="margin-top:14px;min-height:18px" id="mdAccMsg">' + esc(msg || '') + '</p></div>';
     }
     render('');
@@ -331,11 +332,43 @@
       ? pending() + ' change(s) have not reached OneDrive yet and will be lost. Log out anyway?'
       : 'Log out? Cases are removed from this device and load again when you sign in. Signing in again also loads the latest version of the app.';
     if (!confirm(msg)) return;
+    await wipeAndReload(false);
+  }
+  async function wipeAndReload(auto) {
     try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } } catch (e) {}
     try { if (navigator.serviceWorker) { var rg = await navigator.serviceWorker.getRegistrations(); await Promise.all(rg.map(function (r) { return r.unregister(); })); } } catch (e) {}
     await idbClearAll(); setTok(null);
     try { localStorage.removeItem('md.pkce'); } catch (e) {}
+    if (auto) { try { localStorage.setItem('md.idleMsg', '1'); } catch (e) {} }
     location.replace(location.pathname + '?fresh=' + Date.now());
+  }
+  /* ---------- automatic log out after a period with no activity (default 2 hours) ---------- */
+  var IDLE_MS = Math.max(0.05, +(CFG.idleMinutes || 120)) * 60000, idleBusy = false, lastW = 0;
+  function idleLabel() { var m = IDLE_MS / 60000; return m >= 60 ? (m / 60 === 1 ? '1 hour' : (m / 60) + ' hours') : m + ' minutes'; }
+  function markAct() { try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
+  function lastAct() { var v = 0; try { v = +localStorage.getItem('md.act') || 0; } catch (e) {} return v || Date.now(); }
+  function isIdle() { return Date.now() - lastAct() >= IDLE_MS; }
+  async function autoSignOut() {
+    if (pending()) { try { await flush(); } catch (e) {} }
+    if (pending()) {
+      setTok(null);
+      showSignIn('You were signed out after ' + idleLabel() + ' of inactivity. Changes not yet saved to OneDrive are kept on this device and upload when you sign in.');
+      return;
+    }
+    await wipeAndReload(true);
+  }
+  function checkIdle() {
+    if (idleBusy || !tok() || !isIdle()) return;
+    idleBusy = true; autoSignOut().then(function () { idleBusy = false; }, function () { idleBusy = false; });
+  }
+  function startIdleWatch() {
+    var gap = Math.min(5000, IDLE_MS / 4);
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel', 'click'].forEach(function (ev) {
+      window.addEventListener(ev, function () { var n = Date.now(); if (n - lastW > gap) { lastW = n; markAct(); } }, { capture: true, passive: true });
+    });
+    setInterval(checkIdle, Math.min(30000, IDLE_MS / 2));
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkIdle(); });
+    window.addEventListener('focus', checkIdle); window.addEventListener('pageshow', checkIdle);
   }
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest && e.target.closest('#settingsBtn,#logoutBtn'); if (!b) return;
@@ -377,6 +410,7 @@
     var code = p.get('code'), state = p.get('state'); clean();
     if (!pk || pk.st !== state) throw new Error('Sign-in could not be verified. Please try again.');
     await tokenRequest({ grant_type: 'authorization_code', code: code, redirect_uri: REDIRECT, code_verifier: pk.v });
+    markAct();
     try { localStorage.removeItem('md.pkce'); } catch (e) {}
     try {
       var me = await (await gfetch('/me?$select=displayName,mail,userPrincipalName')).json();
@@ -400,6 +434,8 @@
     await openIdb(); await loadCache();
     try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
     if (!tok()) { showSignIn(''); return; }
+    if (isIdle()) { await autoSignOut(); return; }
+    startIdleWatch();
     migrateToAppFolder();
     var o = $('mdSign'); if (o) o.remove();
     readyRes({ collection: collection });

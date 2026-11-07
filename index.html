@@ -161,8 +161,7 @@ label.f .ig input{padding-left:22px}
 .pcbar input{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:14px;width:200px;max-width:100%}
 .pcres{font-size:12px}
 #sideAcct{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:12px;margin-bottom:10px;border-bottom:1px solid var(--line)}
-#sideAcct #settingsBtn{flex:1 1 100%}
-#sideAcct #logoutBtn,#sideAcct #backupBtn{flex:1 1 40%}
+#sideAcct #settingsBtn,#sideAcct #backupBtn{flex:1 1 40%}
 #sideAcct #syncState{flex:1 1 100%;margin:0 !important;font-size:12px;white-space:normal !important}
 .calc{max-width:760px}
 .calcin{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
@@ -192,7 +191,7 @@ fieldset.col-closed>*:not(legend){display:none}
 .tgh.prh{color:#b3261e}
 #side{display:none}
 @media (min-width:1000px){
- body.side-on #app{display:grid;grid-template-columns:268px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+ body.side-on #app{display:grid;grid-template-columns:320px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
  body.side-on #app>header.top{grid-column:1/-1}
  body.side-on #app>main{grid-column:2;min-width:0}
  body.side-on #side{display:block;grid-column:1;grid-row:2;position:sticky;top:var(--hh,64px);height:calc(100vh - var(--hh,64px));overflow-y:auto;background:var(--bar);border-right:1px solid var(--line);padding:12px 12px 24px}
@@ -331,7 +330,7 @@ table.nt th{font-weight:600;background:var(--surface2)}
     <nav id="nav" aria-label="Sections"></nav>
     <div class="sp"></div>
     <input id="q" class="search" type="search" placeholder="Search clients, address, reference" aria-label="Search cases">
-    <button class="btn ghost" id="sideBtn" data-sidetoggle="1" title="Show or hide the task bar on the left">Task bar</button><button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="logoutBtn">Log out</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files"><button class="btn" id="newBtn">New case</button>
+    <button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files"><button class="btn" id="newBtn">New case</button>
   </div></header>
   <aside id="side" aria-label="Task bar"><div id="sideAcct"></div><div id="sideTasks"></div></aside>
   <main class="gut" id="view"></main>
@@ -340,9 +339,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-07 11:27";</script>
-<script src="config.js?v=202611071127"></script>
-<script src="sync.js?v=202611071127"></script>
+<script>window.MD_BUILD="2026-11-07 15:01";</script>
+<script src="config.js?v=202611071501"></script>
+<script src="sync.js?v=202611071501"></script>
 <script>
 (function(){
 'use strict';
@@ -547,7 +546,7 @@ function visible(){
 
 /* ---------- render shell ---------- */
 function renderNav(){updTrayBtn();
-  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['appointments','Appointments'],['notebook','Notebook'],['birthdays','Birthdays'],['calculator','Calculator']];
+  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['appointments','Appointments'],['notebook','Notebook'],['calculator','Payment Calculator'],['birthdays','Birthdays']];
   var dc=dueCount(),tdc=allTasks().filter(function(x){return trBucket(x)==='over'}).length;
   $('#nav').innerHTML=items.map(function(i){
     return '<button data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='reminders'&&dc?'<span class="badge">'+dc+' overdue</span>':'')+(i[0]==='tasks'&&tdc?'<span class="badge">'+tdc+' overdue</span>':'')+(i[0]==='birthdays'&&bdCounts(bdPeople().list).today?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bdCounts(bdPeople().list).today+' today</span>':'')+(i[0]==='appointments'&&apTodayN()?'<span class="badge" style="background:var(--accent-soft,#dbe9f8);color:var(--accent)">'+apTodayN()+' today</span>':'')+'</button>';
@@ -558,7 +557,7 @@ function gbp2(n){return '£'+n.toLocaleString('en-GB',{minimumFractionDigits:2,m
 function calcPay(P,rate,n){var r=rate/1200;return r===0?P/n:P*r/(1-Math.pow(1+r,-n))}
 function calcShell(){
   var list=cases.slice().sort(function(a,b){return names(a).toLowerCase()<names(b).toLowerCase()?-1:1});
-  return '<div class="pagehead"><h1>Mortgage calculator</h1><span class="muted">Monthly payment, repayment and interest only</span></div><div id="calcMain" class="calc">'+
+  return '<div class="pagehead"><h1>Payment calculator</h1><span class="muted">Monthly payment, repayment and interest only</span></div><div id="calcMain" class="calc">'+
    '<div class="calcin"><label class="f">Fill from a case (optional)<select id="calcCase"><option value="">Choose a case, or type the figures below</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(names(x)+(x.clientNo?' ('+x.clientNo+')':''))+'</option>'}).join('')+'</select></label>'+
    '<div class="grid" style="margin-top:10px"><label class="f">Mortgage amount<span class="ig"><i>£</i><input id="calcAmt" type="number" step="any" inputmode="decimal" placeholder="e.g. 250000"></span></label>'+
    '<label class="f">Term (years)<input id="calcYrs" type="number" step="1" inputmode="numeric" placeholder="e.g. 25"></label>'+
@@ -1088,7 +1087,6 @@ function placeAcct(){
     if(lo&&lo.parentNode===acc)top.appendChild(lo);
   }
 }
-try{sideOn=localStorage.getItem('sideOn')!=='0'}catch(e){}
 function applySide(){document.body.classList.toggle('side-on',sideOn);placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
 if(mqSide.addEventListener)mqSide.addEventListener('change',function(){applySide()});
 window.addEventListener('resize',function(){var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
@@ -1099,7 +1097,7 @@ function sideItem(x,b){
 function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var open=allTasks().filter(function(x){return !x.t.done}).sort(function(a,b){var da=tkKey(a.t),db3=tkKey(b.t);return da<db3?-1:da>db3?1:0});
-  var h='<div class="sh"><b>Task bar</b><span class="muted" style="font-size:12px">'+open.length+' open</span><button type="button" class="btn ghost sm" data-sidetoggle="1">Hide</button></div>';
+  var h='<div class="sh"><b>Task bar</b><span class="muted" style="font-size:12px">'+open.length+' open</span></div>';
   var pri=open.filter(function(x){return x.t.pri});
   if(pri.length)h+='<div class="sg prh">High priority · '+pri.length+'</div>'+pri.map(function(x){return sideItem(x,trBucket(x))}).join('');
   [['today','Due today'],['over','Overdue'],['week','Next 7 days'],['later','Later'],['none','No due date']].forEach(function(g){
