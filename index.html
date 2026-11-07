@@ -328,10 +328,54 @@ table.nt th{font-weight:600;background:var(--surface2)}
 #settingsBtn:hover{filter:brightness(1.15)}
 .homesplit{display:flex;flex-direction:column;gap:14px}
 .hp{border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
-@media (min-width:1000px){.hp{height:calc((100vh - var(--hh,64px) - 56px)/2);min-height:300px;overflow:auto}}
+@media (min-width:760px){.hp{height:calc((100vh - var(--hh,64px) - 56px)/2);min-height:300px;overflow:auto}}
 #homeCal .apcell{min-height:64px}
 #homeCal .apwrap{grid-template-columns:minmax(0,1fr) 340px}
 @media (max-width:1300px){#homeCal .apwrap{grid-template-columns:1fr}}
+
+/* ---- layouts per device ---- */
+#newBtn,#settingsBtn,.brand{flex:none}
+nav{flex:0 0 auto}
+/* wide desktop: one row */
+@media (min-width:1360px){
+ .top .in{flex-wrap:nowrap;gap:10px 12px}
+ .top .sp{display:none}
+ #q.search{flex:1 1 140px;width:auto;min-width:110px;max-width:340px}
+ nav button{padding:8px 10px}
+}
+/* laptop and below: two tidy rows */
+@media (max-width:1359px){
+ .brand{order:1} #nav{order:2} #newBtn{order:3} .top .sp{order:4;flex:1} #settingsBtn{order:5}
+ #q.search{order:6} #nav2{order:7}
+ .top .in{gap:8px 12px}
+}
+/* tablet */
+@media (min-width:760px) and (max-width:999px){
+ body.side-on #app{display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+ body.side-on #app>header.top{grid-column:1/-1}
+ body.side-on #app>main{grid-column:2;min-width:0}
+ body.side-on #side{display:block;grid-column:1;grid-row:2;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bar);border-right:1px solid var(--line);padding:12px 10px 24px}
+}
+/* phone and small tablet */
+@media (max-width:999px){
+ .top{position:static}
+ #nav,#nav2{flex:1 1 100%;order:8;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ #nav2{order:9}
+ #q.search{flex:1 1 100%;width:100%;order:7}
+}
+@media (max-width:759px){
+ .brand{font-size:15px;gap:6px}
+ .top .in{gap:6px 8px}
+ .top .btn{padding:8px 11px;font-size:14px}
+ .btn{min-height:40px}
+ .btn.sm{min-height:34px}
+ nav button{padding:9px 11px}
+ input,select,textarea{font-size:16px}
+ .hp{padding:10px}
+ #homeCal .apcell{min-height:46px}
+ #homeCal .apwrap{gap:10px}
+ main{padding-block:12px 70px}
+}
 </style>
 
 <div id="app">
@@ -349,9 +393,9 @@ table.nt th{font-weight:600;background:var(--surface2)}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-07 15:41";</script>
-<script src="config.js?v=202611071541"></script>
-<script src="sync.js?v=202611071541"></script>
+<script>window.MD_BUILD="2026-11-07 15:52";</script>
+<script src="config.js?v=202611071552"></script>
+<script src="sync.js?v=202611071552"></script>
 <script>
 (function(){
 'use strict';
@@ -556,7 +600,7 @@ function visible(){
 
 /* ---------- render shell ---------- */
 function renderNav(){updTrayBtn();
-  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Payment Calculator'],['notebook','Notebook'],['birthdays','Birthdays']];
+  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays']];
   var dc=dueCount(),tdc=allTasks().filter(function(x){return trBucket(x)==='over'}).length;
   var tools={calculator:1,notebook:1,birthdays:1};
   var mk=function(list){return list.map(function(i){
@@ -569,7 +613,7 @@ function gbp2(n){return '£'+n.toLocaleString('en-GB',{minimumFractionDigits:2,m
 function calcPay(P,rate,n){var r=rate/1200;return r===0?P/n:P*r/(1-Math.pow(1+r,-n))}
 function calcShell(){
   var list=cases.slice().sort(function(a,b){return names(a).toLowerCase()<names(b).toLowerCase()?-1:1});
-  return '<div class="pagehead"><h1>Payment calculator</h1><span class="muted">Monthly payment, repayment and interest only</span></div><div id="calcMain" class="calc">'+
+  return '<div class="pagehead"><h1>Mortgage calculator</h1><span class="muted">Monthly payment, repayment and interest only</span></div><div id="calcMain" class="calc">'+
    '<div class="calcin"><label class="f">Fill from a case (optional)<select id="calcCase"><option value="">Choose a case, or type the figures below</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(names(x)+(x.clientNo?' ('+x.clientNo+')':''))+'</option>'}).join('')+'</select></label>'+
    '<div class="grid" style="margin-top:10px"><label class="f">Mortgage amount<span class="ig"><i>£</i><input id="calcAmt" type="number" step="any" inputmode="decimal" placeholder="e.g. 250000"></span></label>'+
    '<label class="f">Term (years)<input id="calcYrs" type="number" step="1" inputmode="numeric" placeholder="e.g. 25"></label>'+
@@ -1087,7 +1131,7 @@ function trItem(x){
   return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+(t.pri&&!t.done?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+k+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
 }
 var sideOn=true;
-var mqSide=window.matchMedia('(min-width:1000px)');
+var mqSide=window.matchMedia('(min-width:760px)');
 function placeAcct(){}
 function applySide(){document.body.classList.toggle('side-on',sideOn);placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
 if(mqSide.addEventListener)mqSide.addEventListener('change',function(){applySide()});
