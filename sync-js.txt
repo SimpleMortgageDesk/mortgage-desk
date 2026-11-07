@@ -1,0 +1,452 @@
+/* Mortgage Desk (web): Microsoft sign-in, OneDrive storage, offline cache.
+   Stores one JSON file per case in OneDrive/Mortgage Desk Data/. No other server is used. */
+(function () {
+  'use strict';
+  var CFG = window.MD_CONFIG || {};
+  var SCOPES = 'Files.ReadWrite.AppFolder User.Read offline_access';
+  var AUTH = 'https://login.microsoftonline.com/' + (CFG.tenant || 'common') + '/oauth2/v2.0/';
+  var GRAPH = 'https://graph.microsoft.com/v1.0';
+  var ROOT = 'Apps / Mortgage Desk';
+  var APP = '/me/drive/special/approot';
+  var COLS = ['cases', 'notebook', 'appointments'];
+  var REDIRECT = CFG.redirectUri || (location.origin + location.pathname.replace(/[^\/]*$/, ''));
+  var $ = function (i) { return document.getElementById(i); };
+  var enc = function (p) { return p.split('/').map(encodeURIComponent).join('/'); };
+  var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+  var safeId = function (s) { return String(s).replace(/[^A-Za-z0-9_\-]/g, '_').slice(0, 120); };
+  var genId = function () { return Math.random().toString(36).slice(2, 12) + Date.now().toString(36).slice(-4); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* ---------- small UI helpers ---------- */
+  function toast(msg) {
+    var t = $('mdToast');
+    if (!t) { t = document.createElement('div'); t.id = 'mdToast'; t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#101C26;color:#fff;padding:10px 16px;border-radius:8px;z-index:200;max-width:90vw;font:14px system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.3)'; document.body.appendChild(t); }
+    t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 5000);
+  }
+  window.mdToast = toast;
+
+  /* ---------- tokens (Microsoft sign-in, PKCE, no library) ---------- */
+  function readTok() { try { return JSON.parse(localStorage.getItem('md.tok2') || 'null'); } catch (e) { return null; } }
+  function writeTok(t) { try { if (t) localStorage.setItem('md.tok2', JSON.stringify(t)); else localStorage.removeItem('md.tok2'); } catch (e) {} }
+  var memTok = null;
+  function tok() { return memTok || (memTok = readTok()); }
+  function setTok(t) { memTok = t; writeTok(t); }
+  function b64url(buf) { var s = ''; new Uint8Array(buf).forEach(function (b) { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function rand(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); }
+  function form(o) { return Object.keys(o).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]); }).join('&'); }
+
+  async function startLogin() {
+    var v = rand(48), st = rand(16);
+    var h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+    try { localStorage.setItem('md.pkce', JSON.stringify({ v: v, st: st })); } catch (e) {}
+    location.href = AUTH + 'authorize?' + form({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: SCOPES, state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: 'select_account' });
+  }
+  async function tokenRequest(params) {
+    var r = await fetch(AUTH + 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(Object.assign({ client_id: CFG.clientId, scope: SCOPES }, params)) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok || j.error) { var e = new Error(j.error_description || j.error || 'Sign-in failed'); e.auth = true; e.code = j.error; throw e; }
+    var old = tok() || {};
+    setTok({ access: j.access_token, refresh: j.refresh_token || old.refresh, exp: Date.now() + (j.expires_in || 3600) * 1000, account: old.account });
+    return j;
+  }
+  var refreshing = null;
+  function getToken() {
+    var t = tok();
+    if (!t) { var e = new Error('Not signed in'); e.auth = true; return Promise.reject(e); }
+    if (t.exp - Date.now() > 120000) return Promise.resolve(t.access);
+    if (refreshing) return refreshing;
+    refreshing = tokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh }).then(function () { return tok().access; }, function (e) {
+      if (e.auth && /invalid_grant|interaction_required|invalid_request/.test(e.code || '')) { setTok(null); sessionExpired(); }
+      throw e;
+    }).then(function (a) { refreshing = null; return a; }, function (e) { refreshing = null; throw e; });
+    return refreshing;
+  }
+  async function gfetch(path, opt, retried) {
+    opt = opt || {};
+    var at = await getToken();
+    var url = path.indexOf('http') === 0 ? path : GRAPH + path;
+    var r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + at }, opt.headers || {}) }));
+    if (r.status === 401 && !retried) { var t = tok(); if (t) { t.exp = 0; } return gfetch(path, opt, true); }
+    if ((r.status === 429 || r.status === 503) && !retried) { await sleep(Math.min(10, +r.headers.get('Retry-After') || 2) * 1000); return gfetch(path, opt, true); }
+    return r;
+  }
+  function httpErr(r) { var e = new Error('OneDrive said ' + r.status); e.status = r.status; return e; }
+
+  /* ---------- local cache (IndexedDB) ---------- */
+  var idb = null;
+  function openIdb() {
+    return new Promise(function (res) {
+      try {
+        var q = indexedDB.open('mortgage-desk', 1);
+        q.onupgradeneeded = function () { var d = q.result; d.createObjectStore('docs', { keyPath: 'k' }); d.createObjectStore('dirty', { keyPath: 'k' }); };
+        q.onsuccess = function () { idb = q.result; res(); };
+        q.onerror = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  function idbAll(store) { return new Promise(function (res) { if (!idb) return res([]); try { var q = idb.transaction(store).objectStore(store).getAll(); q.onsuccess = function () { res(q.result || []); }; q.onerror = function () { res([]); }; } catch (e) { res([]); } }); }
+  function idbPut(store, o) { if (!idb) return; try { idb.transaction(store, 'readwrite').objectStore(store).put(o); } catch (e) {} }
+  function idbDel(store, k) { if (!idb) return; try { idb.transaction(store, 'readwrite').objectStore(store).delete(k); } catch (e) {} }
+  function idbClearAll() { return new Promise(function (res) { if (!idb) return res(); try { var t = idb.transaction(['docs', 'dirty'], 'readwrite'); t.objectStore('docs').clear(); t.objectStore('dirty').clear(); t.oncomplete = res; t.onerror = res; } catch (e) { res(); } }); }
+
+  var mem = { cases: {}, notebook: {}, appointments: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [], appointments: [] };
+  function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); }
+  function snap(col) { return { docs: Object.keys(mem[col]).map(function (id) { var d = mem[col][id].data; return { id: id, data: function () { return clone(d); } }; }) }; }
+  function notify(col) { subs[col].forEach(function (cb) { try { cb(snap(col)); } catch (e) { console.error(e); } }); }
+  var docPath = function (col, id) { return APP + ':/' + enc(col + '/' + id + '.json'); };
+
+  /* ---------- status text ---------- */
+  var st = { offline: false, busy: '', last: 0, err: '' };
+  function pending() { return Object.keys(dirty).length; }
+  function setState() {
+    var el = $('syncState'); if (!el) return;
+    var txt, col = '#58697A';
+    if (!tok()) txt = 'Not signed in';
+    else if (st.busy) txt = st.busy;
+    else if (st.err) { txt = st.err + (pending() ? ' · ' + pending() + ' waiting' : ''); col = '#A3261F'; }
+    else if (st.offline) { txt = 'Offline' + (pending() ? ' · ' + pending() + ' change' + (pending() > 1 ? 's' : '') + ' waiting' : ''); col = '#8A5A00'; }
+    else if (pending()) txt = 'Saving…';
+    else { txt = st.last ? 'Saved to OneDrive ' + new Date(st.last).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'Connected'; col = '#0A6B50'; }
+    el.textContent = txt; el.style.color = col;
+  }
+
+  /* ---------- writing (local first, then OneDrive) ---------- */
+  function localWrite(col, id, data, kind, patch) {
+    var cur = mem[col][id];
+    mem[col][id] = { data: data, etag: cur ? cur.etag : null, itemId: cur ? cur.itemId : null };
+    persistDoc(col, id);
+    var k = col + '/' + id, d = dirty[k];
+    var nd = { k: k, col: col, id: id, kind: (kind === 'set' || (d && d.kind === 'set')) ? 'set' : 'patch', patch: kind === 'set' ? {} : Object.assign({}, d && d.patch || {}, patch || {}), v: ++vctr };
+    dirty[k] = nd; idbPut('dirty', nd); notify(col); scheduleFlush(); setState();
+  }
+  function localDelete(col, id) {
+    delete mem[col][id]; idbDel('docs', col + '/' + id);
+    var k = col + '/' + id, nd = { k: k, col: col, id: id, kind: 'del', patch: {}, v: ++vctr };
+    dirty[k] = nd; idbPut('dirty', nd); notify(col); scheduleFlush(); setState();
+  }
+  function clearDirty(d) { delete dirty[d.k]; idbDel('dirty', d.k); }
+  var flushing = false, flushTimer = null;
+  function scheduleFlush(ms) { clearTimeout(flushTimer); flushTimer = setTimeout(flush, ms == null ? 800 : ms); }
+  function putDoc(col, id, data, etag) {
+    var h = { 'Content-Type': 'application/json' }; if (etag) h['If-Match'] = etag;
+    return gfetch(docPath(col, id) + ':/content', { method: 'PUT', headers: h, body: JSON.stringify(data) });
+  }
+  async function resolveConflict(d) {
+    var m = await gfetch(docPath(d.col, d.id));
+    if (m.status === 404) { var r0 = await putDoc(d.col, d.id, mem[d.col][d.id].data, null); if (!r0.ok) throw httpErr(r0); var j0 = await r0.json(); mem[d.col][d.id].etag = j0.eTag; persistDoc(d.col, d.id); clearDirty(d); return; }
+    if (!m.ok) throw httpErr(m);
+    var meta = await m.json();
+    var c = await gfetch(docPath(d.col, d.id) + ':/content'); if (!c.ok) throw httpErr(c);
+    var remote = await c.json();
+    var merged = d.kind === 'set' ? mem[d.col][d.id].data : Object.assign({}, remote, d.patch);
+    var r = await putDoc(d.col, d.id, merged, meta.eTag);
+    if (!r.ok) throw httpErr(r);
+    var j = await r.json();
+    mem[d.col][d.id] = { data: merged, etag: j.eTag, itemId: j.id }; persistDoc(d.col, d.id); clearDirty(d); notify(d.col);
+    toast('Combined changes made on another device');
+  }
+  async function pushOne(d) {
+    if (d.kind === 'del') {
+      var rd = await gfetch(docPath(d.col, d.id), { method: 'DELETE' });
+      if (rd.ok || rd.status === 404) clearDirty(d); else throw httpErr(rd);
+      return;
+    }
+    var doc = mem[d.col][d.id]; if (!doc) { clearDirty(d); return; }
+    var v = d.v, r = await putDoc(d.col, d.id, doc.data, doc.etag);
+    if (r.status === 412) return resolveConflict(d);
+    if (r.status === 400 && doc.etag) { r = await putDoc(d.col, d.id, doc.data, null); }
+    if (!r.ok) throw httpErr(r);
+    var j = await r.json(); doc.etag = j.eTag; doc.itemId = j.id; persistDoc(d.col, d.id);
+    if (dirty[d.k] && dirty[d.k].v === v) clearDirty(d);
+  }
+  async function flush() {
+    if (flushing || !tok()) return;
+    flushing = true;
+    try {
+      var keys = Object.keys(dirty);
+      for (var i = 0; i < keys.length; i++) { if (dirty[keys[i]]) await pushOne(dirty[keys[i]]); }
+      st.offline = false; st.err = ''; st.last = Date.now();
+      flushing = false; setState();
+      if (pending()) scheduleFlush(300);
+    } catch (e) {
+      flushing = false; handleErr(e);
+      if (!e.auth) scheduleFlush(30000);
+    }
+  }
+  function handleErr(e) {
+    if (e && e.auth) { st.err = 'Sign-in needed'; setState(); return; }
+    if (e instanceof TypeError || (e && /Failed to fetch|NetworkError|Load failed/i.test(e.message))) { st.offline = true; st.err = ''; }
+    else { st.err = 'Sync problem (' + (e && e.message || 'unknown') + ')'; st.offline = false; }
+    setState();
+  }
+
+  /* ---------- reading (delta by eTag) ---------- */
+  async function listRemote(col) {
+    var out = [], url = APP + ':/' + enc(col) + ':/children?$select=id,name,eTag&$top=200';
+    while (url) {
+      var r = await gfetch(url);
+      if (r.status === 404) return out;
+      if (!r.ok) throw httpErr(r);
+      var j = await r.json();
+      (j.value || []).forEach(function (it) { if (it.name && /\.json$/.test(it.name)) out.push({ id: it.name.slice(0, -5), itemId: it.id, etag: it.eTag }); });
+      url = j['@odata.nextLink'] || null;
+    }
+    return out;
+  }
+  var pulling = false, firstPullDone = false;
+  async function pull() {
+    if (pulling || !tok()) return;
+    pulling = true;
+    try {
+      var todo = [], removed = {};
+      for (var ci = 0; ci < COLS.length; ci++) {
+        var col = COLS[ci], remote = await listRemote(col), seen = {};
+        remote.forEach(function (it) {
+          seen[it.id] = 1;
+          var loc = mem[col][it.id];
+          if (dirty[col + '/' + it.id]) return;
+          if (!loc || loc.etag !== it.etag) todo.push({ col: col, it: it });
+        });
+        Object.keys(mem[col]).forEach(function (id) { if (!seen[id] && !dirty[col + '/' + id] && mem[col][id].etag) { delete mem[col][id]; idbDel('docs', col + '/' + id); removed[col] = 1; } });
+      }
+      var total = todo.length, done = 0, touched = {}, big = total > 20;
+      if (big) showLoading('Loading your cases from OneDrive… 0 of ' + total);
+      var idx = 0;
+      async function worker() {
+        while (idx < todo.length) {
+          var w = todo[idx++];
+          var r = await gfetch('/me/drive/items/' + encodeURIComponent(w.it.itemId) + '/content');
+          if (!r.ok) throw httpErr(r);
+          var data = await r.json();
+          if (!dirty[w.col + '/' + w.it.id]) { mem[w.col][w.it.id] = { data: data, etag: w.it.etag, itemId: w.it.itemId }; persistDoc(w.col, w.it.id); touched[w.col] = 1; }
+          done++; if (big && done % 5 === 0) showLoading('Loading your cases from OneDrive… ' + done + ' of ' + total);
+        }
+      }
+      await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+      hideLoading();
+      COLS.forEach(function (c) { if (touched[c] || removed[c]) notify(c); });
+      if (!firstPullDone) {
+        firstPullDone = true;
+        if (!Object.keys(mem.cases).length && !Object.keys(dirty).length) toast('No cases found in your OneDrive yet. Open Account and choose "Import backup file".');
+      }
+      st.offline = false; st.err = ''; st.last = Date.now();
+    } catch (e) { hideLoading(); handleErr(e); }
+    pulling = false; setState();
+  }
+
+  function showLoading(txt) {
+    var o = $('mdLoad');
+    if (!o) { o = document.createElement('div'); o.id = 'mdLoad'; o.style.cssText = 'position:fixed;inset:0;z-index:150;background:rgba(237,240,241,.96);display:flex;align-items:center;justify-content:center;font:16px system-ui,sans-serif;color:#101C26;text-align:center;padding:20px'; document.body.appendChild(o); }
+    o.textContent = txt;
+  }
+  function hideLoading() { var o = $('mdLoad'); if (o) o.remove(); }
+
+  /* ---------- collections ---------- */
+  function collection(col) {
+    return {
+      onSnapshot: function (cb) { subs[col].push(cb); try { cb(snap(col)); } catch (e) { console.error(e); } return function () { subs[col] = subs[col].filter(function (x) { return x !== cb; }); }; },
+      doc: function (id) {
+        id = safeId(id || genId());
+        return {
+          id: id,
+          set: function (data) { localWrite(col, id, clone(data), 'set'); return Promise.resolve(); },
+          update: function (patch) {
+            var cur = mem[col][id], diff = {};
+            Object.keys(patch).forEach(function (k) { if (!cur || JSON.stringify(cur.data[k]) !== JSON.stringify(patch[k])) diff[k] = clone({ v: patch[k] }).v; });
+            if (!Object.keys(diff).length) return Promise.resolve();
+            localWrite(col, id, Object.assign(cur ? clone(cur.data) : {}, clone(diff)), 'patch', diff); return Promise.resolve();
+          },
+          delete: function () { localDelete(col, id); return Promise.resolve(); },
+          get: function () { var c = mem[col][id]; return Promise.resolve(c ? { id: id, exists: true, data: function () { return clone(c.data); } } : { id: id, exists: false }); }
+        };
+      }
+    };
+  }
+
+  /* ---------- sign-in screen ---------- */
+  var readyRes; var ready = new Promise(function (r) { readyRes = r; });
+  function overlay(html) {
+    var o = $('mdSign');
+    if (!o) { o = document.createElement('div'); o.id = 'mdSign'; o.style.cssText = 'position:fixed;inset:0;z-index:300;background:#EDF0F1;display:flex;align-items:center;justify-content:center;padding:16px;font:15px system-ui,"Segoe UI",sans-serif;color:#101C26'; document.body.appendChild(o); }
+    o.innerHTML = html; return o;
+  }
+  function showSignIn(msg) {
+    if (!msg) { try { if (localStorage.getItem('md.idleMsg')) { localStorage.removeItem('md.idleMsg'); msg = 'You were signed out after ' + idleLabel() + ' of inactivity. Sign in again to continue.'; } } catch (e) {} }
+    var bad = !CFG.clientId || /PASTE/i.test(CFG.clientId);
+    var o = overlay('<div style="width:min(420px,100%);background:#fff;border:1px solid #D4DBDF;border-radius:12px;padding:28px;box-shadow:0 8px 30px rgba(16,28,38,.12)">' +
+      '<div style="font-weight:700;font-size:20px;margin-bottom:6px">&#9670; Mortgage Desk</div>' +
+      '<p style="color:#58697A;margin:0 0 18px;font-size:14px;line-height:1.45">Sign in with your Microsoft account. Your cases are stored in your own OneDrive and nowhere else.</p>' +
+      (bad ? '<p style="color:#A3261F;font-size:14px">This copy has not been set up yet (no Microsoft app ID).</p>' : '<button id="mdGo" style="width:100%;padding:12px;border:0;border-radius:8px;background:#0A6B50;color:#fff;font:600 15px system-ui;cursor:pointer">Sign in with Microsoft</button>') +
+      '<div id="mdErr" style="color:#A3261F;font-size:13px;margin-top:12px;min-height:16px">' + esc(msg || '') + '</div></div>');
+    var b = o.querySelector('#mdGo'); if (b) b.onclick = function () { b.disabled = true; startLogin(); };
+  }
+  function sessionExpired() { showSignIn('Your sign-in has expired. Please sign in again. Your unsaved changes are kept on this device.'); }
+
+  /* ---------- account / settings ---------- */
+  async function openAccount() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+    var t = tok() || {};
+    function render(msg) {
+      var acc = t.account || {};
+      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Account</h2><button class="btn ghost" data-a="close">Close</button></div>' +
+        '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
+        '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
+        '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Sign out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn ghost" data-a="out">Sign out of this device</button>' +
+        '<p style="margin-top:14px;min-height:18px" id="mdAccMsg">' + esc(msg || '') + '</p></div>';
+    }
+    render('');
+    var say = function (m) { var e = $('mdAccMsg'); if (e) e.textContent = m; };
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+    ov.addEventListener('change', async function (e) {
+      if (e.target.id !== 'mdImp' || !e.target.files[0]) return;
+      try {
+        var p = JSON.parse(await e.target.files[0].text()), n = 0, skipped = 0;
+        COLS.forEach(function (col) {
+          (p[col] || []).forEach(function (row) {
+            var id = safeId(row.id || genId()); if (mem[col][id]) { skipped++; return; }
+            var d = clone(row); delete d.id; localWrite(col, id, d, 'set'); n++;
+          });
+        });
+        say('Imported ' + n + ' item(s)' + (skipped ? ', skipped ' + skipped + ' that already exist' : '') + '. Uploading to OneDrive…');
+        flush();
+      } catch (x) { say('That file could not be read as a backup.'); }
+    });
+    ov.addEventListener('click', async function (e) {
+      var a = e.target.closest && e.target.closest('[data-a]'); if (!a) return; a = a.getAttribute('data-a');
+      if (a === 'close') ov.remove();
+      else if (a === 'sync') { say('Syncing…'); await flush(); await pull(); say(st.err || (st.offline ? 'Offline. Will retry.' : 'Up to date.')); }
+      else if (a === 'folder') { try { var r = await gfetch(APP); var j = await r.json(); if (j.webUrl) window.open(j.webUrl, '_blank'); else say('Folder not created yet.'); } catch (x) { say('Could not reach OneDrive.'); } }
+      else if (a === 'out') { ov.remove(); signOut(); }
+    });
+  }
+  async function signOut() {
+    if (pending()) { try { await flush(); } catch (e) {} }
+    var msg = pending()
+      ? pending() + ' change(s) have not reached OneDrive yet and will be lost. Log out anyway?'
+      : 'Log out? Cases are removed from this device and load again when you sign in. Signing in again also loads the latest version of the app.';
+    if (!confirm(msg)) return;
+    await wipeAndReload(false);
+  }
+  async function wipeAndReload(auto) {
+    try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } } catch (e) {}
+    try { if (navigator.serviceWorker) { var rg = await navigator.serviceWorker.getRegistrations(); await Promise.all(rg.map(function (r) { return r.unregister(); })); } } catch (e) {}
+    await idbClearAll(); setTok(null);
+    try { localStorage.removeItem('md.pkce'); } catch (e) {}
+    if (auto) { try { localStorage.setItem('md.idleMsg', '1'); } catch (e) {} }
+    location.replace(location.pathname + '?fresh=' + Date.now());
+  }
+  /* ---------- automatic log out after a period with no activity (default 2 hours) ---------- */
+  var IDLE_MS = Math.max(0.05, +(CFG.idleMinutes || 120)) * 60000, idleBusy = false, lastW = 0;
+  function idleLabel() { var m = IDLE_MS / 60000; return m >= 60 ? (m / 60 === 1 ? '1 hour' : (m / 60) + ' hours') : m + ' minutes'; }
+  function markAct() { try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
+  function lastAct() { var v = 0; try { v = +localStorage.getItem('md.act') || 0; } catch (e) {} return v || Date.now(); }
+  function isIdle() { return Date.now() - lastAct() >= IDLE_MS; }
+  async function autoSignOut() {
+    if (pending()) { try { await flush(); } catch (e) {} }
+    if (pending()) {
+      setTok(null);
+      showSignIn('You were signed out after ' + idleLabel() + ' of inactivity. Changes not yet saved to OneDrive are kept on this device and upload when you sign in.');
+      return;
+    }
+    await wipeAndReload(true);
+  }
+  function checkIdle() {
+    if (idleBusy || !tok() || !isIdle()) return;
+    idleBusy = true; autoSignOut().then(function () { idleBusy = false; }, function () { idleBusy = false; });
+  }
+  function startIdleWatch() {
+    var gap = Math.min(5000, IDLE_MS / 4);
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel', 'click'].forEach(function (ev) {
+      window.addEventListener(ev, function () { var n = Date.now(); if (n - lastW > gap) { lastW = n; markAct(); } }, { capture: true, passive: true });
+    });
+    setInterval(checkIdle, Math.min(30000, IDLE_MS / 2));
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkIdle(); });
+    window.addEventListener('focus', checkIdle); window.addEventListener('pageshow', checkIdle);
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#settingsBtn,#logoutBtn'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.id === 'logoutBtn') signOut(); else openAccount();
+  }, true);
+
+  /* ---------- downloads (Backup / CSV buttons) ---------- */
+  function saveFile(o) {
+    return new Promise(function (res) {
+      var blob = new Blob([o.data], { type: /\.csv$/i.test(o.filename) ? 'text/csv' : 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = o.filename; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000); res();
+    });
+  }
+  window.claude = { use: function (name) {
+    if (name === 'db') return ready;
+    if (name === 'downloads') return Promise.resolve({ save: saveFile });
+    return Promise.resolve(null);
+  } };
+
+  /* ---------- start ---------- */
+  function addSyncBadge() {
+    if ($('syncState')) return;
+    var b = $('backupBtn'); if (!b) return;
+    var s = document.createElement('span'); s.id = 'syncState'; s.style.cssText = 'font-size:12px;white-space:nowrap;margin-right:6px'; b.parentNode.insertBefore(s, b); setState();
+  }
+  async function loadCache() {
+    (await idbAll('docs')).forEach(function (r) { if (mem[r.col]) mem[r.col][r.id] = { data: r.data, etag: r.etag, itemId: r.itemId }; });
+    (await idbAll('dirty')).forEach(function (d) { dirty[d.k] = d; vctr = Math.max(vctr, d.v || 0); });
+  }
+  async function handleRedirect() {
+    var p = new URLSearchParams(location.search);
+    if (p.get('fresh') && !p.get('code') && !p.get('error')) { history.replaceState(null, '', location.pathname); return; }
+    if (!p.get('code') && !p.get('error')) return;
+    var clean = function () { history.replaceState(null, '', location.pathname); };
+    if (p.get('error')) { var m = p.get('error_description') || p.get('error'); clean(); throw new Error(m); }
+    var pk = null; try { pk = JSON.parse(localStorage.getItem('md.pkce') || 'null'); } catch (e) {}
+    var code = p.get('code'), state = p.get('state'); clean();
+    if (!pk || pk.st !== state) throw new Error('Sign-in could not be verified. Please try again.');
+    await tokenRequest({ grant_type: 'authorization_code', code: code, redirect_uri: REDIRECT, code_verifier: pk.v });
+    markAct();
+    try { localStorage.removeItem('md.pkce'); } catch (e) {}
+    try {
+      var me = await (await gfetch('/me?$select=displayName,mail,userPrincipalName')).json();
+      var t = tok(); t.account = { name: me.displayName || '', mail: me.mail || me.userPrincipalName || '' }; setTok(t);
+    } catch (e) {}
+  }
+  /* One-time move: cases kept on this device are uploaded to the app's own OneDrive folder. */
+  function migrateToAppFolder() {
+    var done = null; try { done = localStorage.getItem('md.loc2'); } catch (e) {}
+    if (done) return;
+    COLS.forEach(function (col) {
+      Object.keys(mem[col]).forEach(function (id) {
+        var d = mem[col][id]; d.etag = null; d.itemId = null; persistDoc(col, id);
+        var k = col + '/' + id; if (!dirty[k]) { var nd = { k: k, col: col, id: id, kind: 'set', patch: {}, v: ++vctr }; dirty[k] = nd; idbPut('dirty', nd); }
+      });
+    });
+    try { localStorage.setItem('md.loc2', '1'); } catch (e) {}
+  }
+  async function boot() {
+    addSyncBadge();
+    await openIdb(); await loadCache();
+    try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
+    if (!tok()) { showSignIn(''); return; }
+    if (isIdle()) { await autoSignOut(); return; }
+    startIdleWatch();
+    migrateToAppFolder();
+    var o = $('mdSign'); if (o) o.remove();
+    readyRes({ collection: collection });
+    setState();
+    flush(); pull();
+    setInterval(function () { if (document.visibilityState === 'visible') { flush(); pull(); } }, 60000);
+    window.addEventListener('online', function () { st.offline = false; flush(); pull(); });
+    window.addEventListener('offline', function () { st.offline = true; setState(); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); else pull(); });
+    window.addEventListener('pagehide', function () { flush(); });
+  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
+  boot();
+})();
