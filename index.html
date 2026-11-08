@@ -385,7 +385,13 @@ nav{flex:0 0 auto}
 .dh>div:last-child{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
 @media (max-width:759px){.dhb{flex-wrap:wrap !important;flex:1 1 100% !important;justify-content:flex-start !important}.dh h2{font-size:18px}.dhb{gap:6px !important}.dhb .btn{padding:6px 10px;font-size:13px;min-height:34px}.dh{padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:8px}.strip{margin-top:4px}}
 
-fieldset[data-col="connected clients"]{--sc:#2a8c8c}
+@media (min-width:900px){.panel{width:min(1080px,100%)}}
+.appsplit{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:760px){.appsplit{grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}}
+.appleft,.lkpane{min-width:0}
+.lkpane{border-top:1px dashed color-mix(in srgb,#a68a4b 50%,var(--line));padding-top:12px}
+@media (min-width:760px){.lkpane{border-top:0;padding-top:0;border-left:1px dashed color-mix(in srgb,#a68a4b 50%,var(--line));padding-left:16px}}
+.lkt{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;margin-bottom:8px}
 .lkrow{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--surface)}
 .lkh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px}
 .lkh select,.lkadd select,.lkadd input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:14px;max-width:100%}
@@ -410,9 +416,9 @@ fieldset[data-col="connected clients"]{--sc:#2a8c8c}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 11:47";</script>
-<script src="config.js?v=202611081147"></script>
-<script src="sync.js?v=202611081147"></script>
+<script>window.MD_BUILD="2026-11-08 12:07";</script>
+<script src="config.js?v=202611081207"></script>
+<script src="sync.js?v=202611081207"></script>
 <script>
 (function(){
 'use strict';
@@ -819,8 +825,7 @@ function openDrawer(id,draft){
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></fieldset>'+
-   '<fieldset class="lkfs"><legend>Connected clients (0)</legend><div id="linksBox"></div></fieldset>'+
+   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" id="lkTitle">Connected clients (0)</div><div id="linksBox"></div></aside></div></fieldset>'+
    '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add the address of each property the mortgage is secured on.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
    secFs('lender','Lender')+
      fld('lender','Lender name',c.lender)+
@@ -1110,8 +1115,7 @@ function renderLinks(){
     '<datalist id="lkDL">'+Object.keys(opts).sort().map(function(n){return '<option value="'+esc(n)+'">'}).join('')+'</datalist>'+
     '<p class="muted" style="font-size:12px;margin:6px 0 0">Pick the client, then choose who they are to this client (for example Parent). The link shows on both records.</p>';
   box.innerHTML=h;
-  var fs=box.closest('fieldset'),lg=fs&&fs.querySelector(':scope>legend');
-  if(lg&&lg.firstChild&&lg.firstChild.nodeType===3)lg.firstChild.nodeValue='Connected clients ('+ed.length+') ';
+  var lt=document.getElementById('lkTitle');if(lt)lt.textContent='Connected clients ('+ed.length+')';
 }
 document.addEventListener('click',function(e){
   var t=e.target;if(!t||!t.closest)return;
