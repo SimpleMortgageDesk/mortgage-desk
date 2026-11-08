@@ -459,3 +459,13 @@ header.top .in{padding-block:12px}}
 .mkpanel input,.mkpanel select,.mkpanel textarea{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
 .mkact{display:flex;gap:8px;margin-top:6px}
 #mkList{display:grid;grid-template-columns:minmax(0,1fr)}
+#sideTools{display:flex;flex-direction:column;min-height:calc(100vh - var(--hh,64px) - 36px)}
+.sbtn{background:#2f4a40;color:#fff;justify-content:flex-start;font-weight:600;margin-bottom:6px}
+.sbtn:hover{background:#3b5c50;color:#fff}
+.sbtn[aria-current="page"]{background:var(--accent);color:var(--accent-ink,#fff)}
+.sbtn .badge{margin-left:auto}
+#sideTools .sbtn.acct{margin:auto 0 0;justify-content:center}
+.mklinks{white-space:nowrap}
+.mklink{display:inline-block;padding:3px 9px;border-radius:12px;font-size:12px;font-weight:600;text-decoration:none;margin-right:5px}
+.mklink.wa{background:#e3f4e8;color:#1b5e20}.mklink.em{background:#e6eef9;color:#1a4b8c}
+.mklink:hover{filter:brightness(.95);text-decoration:underline}

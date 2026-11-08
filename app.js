@@ -558,7 +558,18 @@ function mkFiltered(){
     if(mkGroup&&(c.group||'')!==mkGroup)return false;
     if(!q)return true;
     return ((c.name||'')+' '+(c.phone||'')+' '+(c.email||'')+' '+(c.group||'')+' '+(c.notes||'')).toLowerCase().indexOf(q)>=0;
-  }).sort(function(a,b){return (a.name||a.phone||a.email||'').toLowerCase()<(b.name||b.phone||b.email||'').toLowerCase()?-1:1});
+  }).sort(function(a,b){
+    var na=mkNamed(a),nb=mkNamed(b);if(na!==nb)return na?-1:1;
+    return (na?a.name:(a.phone||a.email||'')).localeCompare(nb?b.name:(b.phone||b.email||''),undefined,{sensitivity:'base',numeric:true});
+  });
+}
+function mkNamed(c){return !!(c.name&&/\p{L}/u.test(c.name))}
+function mkWa(c){var d=String(c.phone||'').replace(/\D/g,'');return d.length>=8?'https://wa.me/'+d:''}
+function mkLinks(c){
+  var w=mkWa(c),h='';
+  if(w)h+='<a class="mklink wa" href="'+esc(w)+'" target="_blank" rel="noopener noreferrer" title="Open WhatsApp chat">WhatsApp</a>';
+  if(c.email)h+='<a class="mklink em" href="mailto:'+esc(c.email)+'" title="Send an email">Email</a>';
+  return h||'<span class="muted">\u2014</span>';
 }
 function mkList(){
   var box=$('#mkList');if(!box)return;
@@ -569,9 +580,9 @@ function mkList(){
   var ct=$('#mkCount');if(ct)ct.textContent=l.length===n?n+' contact'+(n===1?'':'s'):l.length+' of '+n+' shown';
   if(!n){box.innerHTML='<div class="empty"><h2>No contacts yet</h2>Use Import to load a CSV or vCard (.vcf) file, or Add contact to type one in.</div>';return}
   if(!l.length){box.innerHTML='<div class="muted" style="margin-top:12px">No contacts match.</div>';return}
-  box.innerHTML='<div class="tw"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Group</th><th>Consent</th><th>Notes</th></tr></thead><tbody>'+shown.map(function(c){
+  box.innerHTML='<div class="tw"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Group</th><th>Message</th><th>Consent</th><th>Notes</th></tr></thead><tbody>'+shown.map(function(c){
     var k=c.consent||'unknown';
-    return '<tr class="click" data-mkedit="'+esc(c.id)+'"><td><b>'+esc(c.name||'(no name)')+'</b></td><td class="num">'+esc(c.phone||'')+'</td><td>'+esc(c.email||'')+'</td><td>'+esc(c.group||'')+'</td><td><span class="chip mk-'+k+'">'+MK_LABEL[k]+'</span></td><td class="ntc"><div class="nl1">'+esc(c.notes||'')+'</div></td></tr>';
+    return '<tr class="click" data-mkedit="'+esc(c.id)+'"><td><b>'+esc(c.name||'(no name)')+'</b></td><td class="num">'+esc(c.phone||'')+'</td><td>'+esc(c.email||'')+'</td><td>'+esc(c.group||'')+'</td><td class="mklinks">'+mkLinks(c)+'</td><td><span class="chip mk-'+k+'">'+MK_LABEL[k]+'</span></td><td class="ntc"><div class="nl1">'+esc(c.notes||'')+'</div></td></tr>';
   }).join('')+'</tbody></table></div>'+(l.length>shown.length?'<div class="muted" style="margin-top:8px">Showing the first 500. Use search or filters to narrow the list.</div>':'');
 }
 function mkNorm(p){
@@ -1014,7 +1025,7 @@ function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var bt=bdCounts(bdPeople().list).today;
   var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
-  s.innerHTML='<div id="sideTools"><button type="button" class="sbtn acct" data-sideacct="1">Account</button><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'</div>';
+  s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Settings</button></div>';
 }
 function renderRem(){
   var s=$('#homeRem');if(!s)return;
@@ -1258,7 +1269,7 @@ document.addEventListener('click',function(e){
   var bdf=t.closest&&t.closest('[data-bdf]');if(bdf){bdFilter=bdf.getAttribute('data-bdf');bdRender();return}
   if(t.closest&&t.closest('[data-mkadd]')){mkOpen(null);return}
   if(t.closest&&t.closest('[data-mkexp]')){mkExport();return}
-  var mke=t.closest&&t.closest('[data-mkedit]');if(mke){mkOpen(mke.getAttribute('data-mkedit'));return}
+  var mke=t.closest&&t.closest('[data-mkedit]');if(mke&&!(t.closest&&t.closest('a'))){mkOpen(mke.getAttribute('data-mkedit'));return}
   if(t.closest&&t.closest('[data-mksave]')){mkSaveForm();return}
   if(t.closest&&t.closest('[data-mkcancel]')){mkClose();return}
   if(t.id==='mkOv'){mkClose();return}

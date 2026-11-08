@@ -232,7 +232,7 @@
       COLS.forEach(function (c) { if (touched[c] || removed[c]) notify(c); });
       if (!firstPullDone) {
         firstPullDone = true;
-        if (!Object.keys(mem.cases).length && !Object.keys(dirty).length) toast('No cases found in your OneDrive yet. Open Account and choose "Import backup file".');
+        if (!Object.keys(mem.cases).length && !Object.keys(dirty).length) toast('No cases found in your OneDrive yet. Open Settings and choose "Import backup file".');
       }
       st.offline = false; st.err = ''; st.last = Date.now();
     } catch (e) { hideLoading(); handleErr(e); }
@@ -309,7 +309,7 @@
         if (r.ok) { var jj = await r.json().catch(function () { return {}; }); await ref.update({ calId: jj.id || a.calId || '', calH: h }); changed = true; }
       }
     } catch (e) {
-      if (e && e.cal) { lset('md.cal', null); toast('Calendar reminders stopped: permission was not given. Turn them on again in Account.'); }
+      if (e && e.cal) { lset('md.cal', null); toast('Calendar reminders stopped: permission was not given. Turn them on again in Settings.'); }
     } finally {
       calBusy = false;
       if (changed || calAgain) { calAgain = false; calSchedule(3000); }
@@ -638,7 +638,7 @@
     function render(msg) {
       var acc = t.account || {};
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Account</h2><button class="btn ghost" data-a="close">Close</button></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Settings</h2><button class="btn ghost" data-a="close">Close</button></div>' +
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
         '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
@@ -772,7 +772,7 @@
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:260;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
     ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(520px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)"><h2 style="margin:0 0 10px;font-size:20px">Quick guide</h2>' +
-      '<ul style="margin:0 0 12px;padding-left:20px"><li><b>Tasks</b> (home page): tick things off. Tap a task to change its date or edit it.</li><li><b>Create Case</b> opens a new client. Everything saves by itself to your OneDrive.</li><li><b>Tools</b> (left bar): Mortgage Calculator, Notebook, Birthdays and Account.</li><li><b>Reminders</b> (right of the home page): mortgage reviews coming up.</li><li><b>Account</b>: set a PIN, sync, back up to PDF/CSV, restore, calendar reminders.</li></ul>' +
+      '<ul style="margin:0 0 12px;padding-left:20px"><li><b>Tasks</b> (home page): tick things off. Tap a task to change its date or edit it.</li><li><b>Create Case</b> opens a new client. Everything saves by itself to your OneDrive.</li><li><b>Tools</b> (left bar): Mortgage Calculator, Notebook, Birthdays and Settings.</li><li><b>Reminders</b> (right of the home page): mortgage reviews coming up.</li><li><b>Settings</b>: set a PIN, sync, back up to PDF/CSV, restore, calendar reminders.</li></ul>' +
       '<p style="margin:0 0 6px"><b>Please do not record</b> NI numbers, bank or sort-code details, passport numbers, income and expenditure, health or lifestyle answers, immigration share codes or benefit amounts.</p>' +
       '<p style="margin:0 0 14px;color:#58697A">Keep your own Microsoft login private, and save your Microsoft recovery code somewhere safe.</p><button class="btn" data-g="1">Got it</button></div>';
     document.body.appendChild(ov);
