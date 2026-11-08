@@ -376,6 +376,23 @@ nav{flex:0 0 auto}
  #homeCal .apwrap{gap:10px}
  main{padding-block:12px 70px}
 }
+
+/* phone fix: case panel must never be wider than the screen */
+.panel{min-width:0;max-width:100%}
+.db{min-width:0;overflow-x:hidden}
+.dh{flex-wrap:wrap}
+.dh>div{min-width:0}
+.dh>div:last-child{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+@media (max-width:759px){.dhb{flex-wrap:wrap !important;flex:1 1 100% !important;justify-content:flex-start !important}.dh h2{font-size:18px}.dhb{gap:6px !important}.dhb .btn{padding:6px 10px;font-size:13px;min-height:34px}.dh{padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:8px}.strip{margin-top:4px}}
+
+fieldset[data-col="connected clients"]{--sc:#2a8c8c}
+.lkrow{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--surface)}
+.lkh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:4px}
+.lkh select,.lkadd select,.lkadd input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-size:14px;max-width:100%}
+.lkc{font-size:13px;margin-top:2px}
+.lkact{font-size:12px;margin-top:4px}
+.lkadd{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lkadd input{flex:1 1 180px;min-width:0}
 </style>
 
 <div id="app">
@@ -393,9 +410,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-07 15:52";</script>
-<script src="config.js?v=202611071552"></script>
-<script src="sync.js?v=202611071552"></script>
+<script>window.MD_BUILD="2026-11-08 11:47";</script>
+<script src="config.js?v=202611081147"></script>
+<script src="sync.js?v=202611081147"></script>
 <script>
 (function(){
 'use strict';
@@ -803,6 +820,7 @@ function openDrawer(id,draft){
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
    (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></fieldset>'+
+   '<fieldset class="lkfs"><legend>Connected clients (0)</legend><div id="linksBox"></div></fieldset>'+
    '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add the address of each property the mortgage is secured on.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
    secFs('lender','Lender')+
      fld('lender','Lender name',c.lender)+
@@ -829,7 +847,7 @@ function openDrawer(id,draft){
    '<fieldset class="odfs"><legend>OneDrive folder</legend><label class="f">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
   '</form>'+
   '<div class="df"><div>'+(id?'<button type="button" class="btn danger" id="delBtn">Delete case</button><span class="muted" id="autoMsg" style="font-size:12px;margin-left:10px">Auto-save on (every 5 seconds)</span>':'')+'</div><div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn" id="saveBtn">Save case</button></div></div></div>';
-  colOpen={};renderLive();
+  colOpen={};curLinks=((c&&c.links)||[]).map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}});renderLive();renderLinks();
   var first=$('#drawer [data-a="name"]');if(first&&!id)first.focus();
   ntDraft=(id&&c.noteDraft)||'';prDraft=(id&&c.protDraft)||'';lastND=ntDraft;lastPD=prDraft;renderLive();
   lastAuto=id?JSON.stringify(collectForm()):null;
@@ -1034,6 +1052,83 @@ function noteItem(n,list,suffix,fmt){
   return '<div class="note"><small>'+head+' <button type="button" class="btn ghost sm" data-nedit="'+list+'|'+n.ts+'" style="margin-left:8px">Edit</button></small>'+fmt(n.text)+tblBlock(n,list)+'</div>';
 }
 var colOpen={};
+/* ---------- connected clients ---------- */
+var curLinks=[];
+var REL_OPTS=['Spouse / partner','Parent','Child','Grandparent','Grandchild','Sibling','Other relative','Friend','Colleague','Business partner','Employer','Employee','Referred by','Referred client','Other'];
+var REL_INV={'Spouse / partner':'Spouse / partner','Parent':'Child','Child':'Parent','Grandparent':'Grandchild','Grandchild':'Grandparent','Sibling':'Sibling','Other relative':'Other relative','Friend':'Friend','Colleague':'Colleague','Business partner':'Business partner','Employer':'Employee','Employee':'Employer','Referred by':'Referred client','Referred client':'Referred by','Other':'Other'};
+function lkById(id){return cases.filter(function(x){return x.id===id})[0]}
+function nkey(c){return names(c).toLowerCase()}
+function lkGroup(c){if(!c)return[];var k=nkey(c);return cases.filter(function(x){return nkey(x)===k})}
+function lkIds(g){var o={};g.forEach(function(x){o[x.id]=1});return o}
+function lkEdges(){
+  var me=currentCase(),g=me?lkGroup(me):[],gids=lkIds(g),seen={},list=[];
+  function add(o,rel){if(!o||gids[o.id]||o.id===openId)return;var k=nkey(o);if(seen[k])return;seen[k]=1;list.push({o:o,rel:rel})}
+  curLinks.forEach(function(l){add(lkById(l.cid),l.rel)});
+  g.forEach(function(x){if(x.id===openId)return;(x.links||[]).forEach(function(l){add(lkById(l.cid),l.rel)})});
+  cases.forEach(function(x){if(gids[x.id])return;(x.links||[]).forEach(function(l){if(gids[l.cid])add(x,REL_INV[l.rel]||l.rel)})});
+  return list;
+}
+function lkSave(){if(openId)patch(openId,{links:curLinks.map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}})})}
+function lkDrop(target){
+  if(!target)return;
+  var me=currentCase(),mg=me?lkGroup(me):[],mids=lkIds(mg),tg=lkGroup(target),tids=lkIds(tg);
+  curLinks=curLinks.filter(function(l){return !tids[l.cid]});
+  mg.forEach(function(x){if(x.id===openId)return;var n=(x.links||[]).filter(function(l){return !tids[l.cid]});if(n.length!==(x.links||[]).length)patch(x.id,{links:n})});
+  tg.forEach(function(x){var n=(x.links||[]).filter(function(l){return !mids[l.cid]});if(n.length!==(x.links||[]).length)patch(x.id,{links:n})});
+  lkSave();
+}
+function lkSet(target,rel){
+  if(!target)return;lkDrop(target);
+  var tg=lkGroup(target).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)})[0]||target;
+  curLinks.push({id:Math.random().toString(36).slice(2,9),cid:tg.id,rel:rel});lkSave();
+}
+function lkCaseLine(x){
+  var bits=[STAGE_LABEL[x.stage]||x.stage||'',x.type||'',x.lender||'',x.loanAmount?money(x.loanAmount):'',x.fixedUntil?'rate ends '+fd(x.fixedUntil):''].filter(Boolean);
+  return '<div class="lkc">'+bits.map(esc).join(' · ')+'</div>';
+}
+function lkActivity(g){
+  var tk=0,nn=0,last=null;
+  g.forEach(function(x){(x.tasks||[]).forEach(function(t){if(!t.done)tk++});(x.notes||[]).forEach(function(n){nn++;if(!last||(n.ts||0)>(last.ts||0))last=n})});
+  var s=tk+' open task'+(tk===1?'':'s')+' · '+nn+' note'+(nn===1?'':'s');
+  if(last)s+=' · latest '+new Date(last.ts||0).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+': '+String(last.text||'').replace(/\s+/g,' ').slice(0,90);
+  return s;
+}
+function renderLinks(){
+  var box=document.getElementById('linksBox');if(!box)return;
+  var ed=lkEdges(),me=currentCase(),mids=lkIds(me?lkGroup(me):[]),taken={};
+  ed.forEach(function(e){taken[nkey(e.o)]=1});
+  var opts={};cases.forEach(function(x){var k=nkey(x);if(mids[x.id]||x.id===openId||taken[k]||k==='unnamed client')return;opts[names(x)]=1});
+  var h=ed.map(function(e){
+    var g=lkGroup(e.o).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
+    return '<div class="lkrow"><div class="lkh"><button type="button" class="lnk" data-lkopen="'+e.o.id+'"><b>'+esc(names(e.o))+'</b></button>'+
+      '<select data-lkrel="'+e.o.id+'" aria-label="Relationship">'+REL_OPTS.map(function(r){return '<option'+(r===e.rel?' selected':'')+'>'+esc(r)+'</option>'}).join('')+'</select>'+
+      '<button type="button" class="btn ghost sm" data-lkdel="'+e.o.id+'">Remove</button></div>'+
+      g.map(lkCaseLine).join('')+'<div class="muted lkact">'+esc(lkActivity(g))+'</div></div>';
+  }).join('');
+  if(!ed.length)h='<p class="muted" style="margin:0 0 8px">No connected clients yet.</p>';
+  h+='<div class="lkadd"><input id="lkQ" list="lkDL" placeholder="Search client name" autocomplete="off"><select id="lkRel" aria-label="They are this client\'s">'+REL_OPTS.map(function(r){return '<option>'+esc(r)+'</option>'}).join('')+'</select><button type="button" class="btn sm" id="lkAdd">Add</button></div>'+
+    '<datalist id="lkDL">'+Object.keys(opts).sort().map(function(n){return '<option value="'+esc(n)+'">'}).join('')+'</datalist>'+
+    '<p class="muted" style="font-size:12px;margin:6px 0 0">Pick the client, then choose who they are to this client (for example Parent). The link shows on both records.</p>';
+  box.innerHTML=h;
+  var fs=box.closest('fieldset'),lg=fs&&fs.querySelector(':scope>legend');
+  if(lg&&lg.firstChild&&lg.firstChild.nodeType===3)lg.firstChild.nodeValue='Connected clients ('+ed.length+') ';
+}
+document.addEventListener('click',function(e){
+  var t=e.target;if(!t||!t.closest)return;
+  var b=t.closest('[data-lkopen]');
+  if(b){e.preventDefault();var id=b.getAttribute('data-lkopen');if(openId&&document.getElementById('caseForm'))patch(openId,collectForm());openDrawer(id);return}
+  b=t.closest('[data-lkdel]');
+  if(b){if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Confirm remove';return}lkDrop(lkById(b.getAttribute('data-lkdel')));renderLinks();setTimeout(renderLinks,200);toast('Connection removed');return}
+  if(t.closest('#lkAdd')){
+    var q=document.getElementById('lkQ'),r=document.getElementById('lkRel'),nm=((q&&q.value)||'').trim().toLowerCase();
+    var me=currentCase(),mids=lkIds(me?lkGroup(me):[]);
+    var cand=cases.filter(function(x){return nkey(x)===nm&&!mids[x.id]&&x.id!==openId});
+    if(!nm||!cand.length){toast('Choose a client from the list');return}
+    lkSet(cand[0],r.value);renderLinks();setTimeout(renderLinks,200);toast('Clients connected');
+  }
+});
+document.addEventListener('change',function(e){var s=e.target;if(s&&s.hasAttribute&&s.hasAttribute('data-lkrel')){lkSet(lkById(s.getAttribute('data-lkrel')),s.value);renderLinks();setTimeout(renderLinks,200)}});
+
 function decorateSecs(){
   var f=document.getElementById('caseForm');if(!f)return;
   var fs=f.querySelectorAll('fieldset');
@@ -1091,6 +1186,7 @@ function collectForm(){
     var has=['address','lender','lenderRef','product','fixedUntil','reviewDate','erc','mortgageExpiry','rate','followOnRate','monthlyPayment','loanAmount'].some(function(k){return x[k]});
     if(has)o.securities.push(x);
   });
+  o.links=curLinks.map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}});
   return o;
 }
 function saveCase(){
