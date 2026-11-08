@@ -192,7 +192,7 @@ fieldset.col-closed>*:not(legend){display:none}
 .tgh.prh{color:#b3261e}
 #side{display:none}
 @media (min-width:1000px){
- body.side-on #app{display:grid;grid-template-columns:320px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+ body.side-on #app{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
  body.side-on #app>header.top{grid-column:1/-1}
  body.side-on #app>main{grid-column:2;min-width:0}
  body.side-on #side{display:block;grid-column:1;grid-row:2;position:sticky;top:var(--hh,64px);height:calc(100vh - var(--hh,64px));overflow-y:auto;background:var(--bar);border-right:1px solid var(--line);padding:12px 12px 24px}
@@ -364,7 +364,7 @@ nav{flex:0 0 auto}
 }
 /* tablet */
 @media (min-width:760px) and (max-width:999px){
- body.side-on #app{display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
+ body.side-on #app{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:start}
  body.side-on #app>header.top{grid-column:1/-1}
  body.side-on #app>main{grid-column:2;min-width:0}
  body.side-on #side{display:block;grid-column:1;grid-row:2;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bar);border-right:1px solid var(--line);padding:12px 10px 24px}
@@ -418,6 +418,23 @@ nav{flex:0 0 auto}
 .bdgenw .bdgen:first-child{border-radius:6px 0 0 6px}
 .bdgenw .bdgen:last-child{border-radius:0 6px 6px 0;margin-left:-1px}
 .bdgen[aria-pressed="true"]{background:#2f4a40;color:#fff;border-color:#2f4a40}
+#homeCal{grid-area:cal}
+.htk{grid-area:tasks}
+.hrem{grid-area:rem}
+#homeRem .sh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+#homeRem .sh b{font-size:14px}
+#homeRem .sg{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;margin:12px 0 6px}
+#homeRem .sg.bad{color:var(--bad)}
+#homeRem .sglater{display:block;width:100%;text-align:left;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;padding:0}
+#sideTools .sh{margin-bottom:8px}#sideTools .sh b{font-size:14px}
+.sbtn{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:0;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--ink);font:inherit;font-weight:500;margin-bottom:2px}
+.sbtn:hover{background:var(--surface2)}
+.sbtn[aria-current="page"]{background:var(--accent-soft);font-weight:600}
+.sbtn.acct{margin-top:14px;background:#2f4a40;color:#fff;justify-content:center;font-weight:600}
+.sbtn .badge{font-size:11px;padding:1px 6px;border-radius:9px;font-weight:600}
+@media (min-width:760px){body.side-on #nav2,body.side-on #settingsBtn{display:none}.hrem{height:auto;max-height:420px}}
+@media (min-width:1100px){.homesplit{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-areas:"cal rem" "tasks rem";gap:14px;align-items:start}.hrem{height:calc(100vh - var(--hh,64px) - 56px);max-height:none;position:sticky;top:calc(var(--hh,64px) + 12px)}}
+@media (max-width:759px){#homeRem{display:none}}
 </style>
 
 <div id="app">
@@ -435,9 +452,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 13:30";</script>
-<script src="config.js?v=202611081330"></script>
-<script src="sync.js?v=202611081330"></script>
+<script>window.MD_BUILD="2026-11-08 13:40";</script>
+<script src="config.js?v=202611081340"></script>
+<script src="sync.js?v=202611081340"></script>
 <script>
 (function(){
 'use strict';
@@ -684,7 +701,7 @@ function render(){
   var v=$('#view');
   if(!db){v.innerHTML='<div class="banner">Saving is not available in this view, so cases cannot be stored. Open the page from your artifact link while signed in.</div>';return}
   if(!loaded){v.innerHTML='<div class="empty">Loading your cases…</div>';return}
-  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHome();renderTray()}
+  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp htk" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section><aside class="hp hrem" id="homeRem" aria-label="Reminders"></aside></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHome();renderTray();renderRem()}
   else if(view==='notebook'){if(!$('#nbMain')||!v.contains($('#nbMain'))){v.innerHTML=nbShell();nbShown=null}renderNotebook()}
   else if(view==='calculator'){if(!$('#calcMain')||!v.contains($('#calcMain'))){v.innerHTML=calcShell();calcUpdate()}}
   else if(view==='birthdays'){if(!$('#bdList')||!v.contains($('#bdList'))){v.innerHTML=bdShell();bdTplRender()}bdRender()}
@@ -1293,7 +1310,7 @@ var sideOn=true;
 var mqSide=window.matchMedia('(min-width:760px)');
 function placeAcct(){}
 function sideVisible(){var sd=document.getElementById('side');return !!sd&&document.body.classList.contains('side-on')&&getComputedStyle(sd).display!=='none'}
-function applySide(){document.body.classList.toggle('side-on',sideOn);if(sideVisible()&&view==='reminders'){view='tasks';render()}renderNav();placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
+function applySide(){document.body.classList.toggle('side-on',sideOn);if(sideVisible()&&view==='reminders'){view='tasks';render()}renderNav();placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide();renderRem()}
 if(mqSide.addEventListener)mqSide.addEventListener('change',function(){applySide()});
 window.addEventListener('resize',function(){if(sideVisible()&&view==='reminders'){view='tasks';render()}renderNav();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
 function sideItem(e,g){
@@ -1302,6 +1319,12 @@ function sideItem(e,g){
 var sideLater=false;
 function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
+  var bt=bdCounts(bdPeople().list).today;
+  var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays']];
+  s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Account</button></div>';
+}
+function renderRem(){
+  var s=$('#homeRem');if(!s)return;
   var ev=reviewEvents();
   var h='<div class="sh"><b>Reminders</b><span class="muted" style="font-size:12px">'+ev.length+' review'+(ev.length===1?'':'s')+'</span></div>';
   [['over','Overdue',function(n){return n<0}],['week','Next 7 days',function(n){return n>=0&&n<=7}],['month','Next 30 days',function(n){return n>7&&n<=30}],['q','31 to 90 days',function(n){return n>30&&n<=90}],['later','Later',function(n){return n>90}]].forEach(function(g){
@@ -1506,7 +1529,8 @@ document.addEventListener('click',function(e){
   var o=t.closest('[data-open]');
   if(o){e.preventDefault();openDrawer(o.dataset.open);return}
   if(t.closest('.brand')){nbFlush();view='tasks';render();window.scrollTo(0,0);return}
-  var nv=t.closest('#nav button,#nav2 button');
+  if(t.closest&&t.closest('[data-sideacct]')){var sb=document.getElementById('settingsBtn');if(sb)sb.click();return}
+  var nv=t.closest('#nav button,#nav2 button,#sideTools button[data-v]');
   if(nv){nbFlush();view=nv.dataset.v;render();return}
   if(t.closest('#newBtn')||t.closest('[data-act="new"]')){openDrawer(null);return}
   if(t.closest('#pdfBtn')||t.closest('[data-act="pdf"]')){$('#pdfIn').click();return}
@@ -1515,7 +1539,7 @@ document.addEventListener('click',function(e){
   if(t.closest('#trayBtn')){if(trayOpen)closeTray();else openTray();return}
   if(t.closest('[data-trclose]')){closeTray();return}
   if(t.closest('[data-clrf]')){stageFilter='';lenderFilter='';revFilter='';render();return}
-  var sl=t.closest('[data-sidelater]');if(sl){sideLater=!sideLater;renderSide();return}
+  var sl=t.closest('[data-sidelater]');if(sl){sideLater=!sideLater;renderRem();return}
   var tg=t.closest('[data-trtog]');if(tg){var kk=tg.getAttribute('data-trtog');trOpen[kk]=!trOpen[kk];renderTray();return}
   var tb=t.closest('[data-trbulk]');if(tb){trBulk(tb.getAttribute('data-trbulk'));return}
   var tf=t.closest('[data-trf]');if(tf){trFilter=tf.dataset.trf;renderTray();return}
