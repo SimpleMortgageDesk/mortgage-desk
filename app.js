@@ -246,7 +246,7 @@ function render(){
   if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp htk" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section><aside class="hp hrem" id="homeRem" aria-label="Reminders"></aside></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHome();renderTray();renderRem()}
   else if(view==='notebook'){if(!$('#nbMain')||!v.contains($('#nbMain'))){v.innerHTML=nbShell();nbShown=null}renderNotebook()}
   else if(view==='calculator'){if(!$('#calcMain')||!v.contains($('#calcMain'))){v.innerHTML=calcShell();calcUpdate()}}
-  else if(view==='marketing'){if(!$('#mkList')||!v.contains($('#mkList')))v.innerHTML=mkShell();mkList()}
+  else if(view==='marketing'){var mr=$('#mkRoot');if(!mr||!v.contains(mr)||mr.getAttribute('data-tab')!==mkTab)v.innerHTML=mkShell();mkList()}
   else if(view==='birthdays'){if(!$('#bdList')||!v.contains($('#bdList'))){v.innerHTML=bdShell();bdTplRender()}bdRender()}
   else if(view==='appointments')v.innerHTML=apHTML();
   else if(view==='pipeline')v.innerHTML=pipelineHTML();
@@ -543,12 +543,15 @@ var mkCol=null,mkItems=[],mkQuery='',mkConsent='',mkGroup='',mkGroupKey='',mkEdi
 var MK_LABEL={yes:'Opted in',unknown:'Unknown',no:'Opted out'};
 function mkSave(){var items=mkItems.slice();return write('mk',function(){return mkCol.doc('contacts').set({items:items,updatedAt:Date.now()})})}
 function mkShell(){
-  return '<div class="pagehead"><h1>Marketing</h1><span class="muted">Contacts for your marketing</span></div>'+
-  '<div class="mktabs"><button type="button" class="mktab on" data-mktab="contacts">Contacts</button></div>'+
+  var tabs='<div class="mktabs"><button type="button" class="mktab'+(mkTab==='contacts'?' on':'')+'" data-mktab="contacts">Contacts</button><button type="button" class="mktab'+(mkTab==='messages'?' on':'')+'" data-mktab="messages">Messages</button></div>';
+  var head='<div class="pagehead"><h1>Marketing</h1><span class="muted">'+(mkTab==='messages'?'Messages to send to your contacts':'Contacts for your marketing')+'</span></div>';
+  if(mkTab==='messages')return '<div id="mkRoot" data-tab="messages">'+head+tabs+'<div id="mkMsgs"></div></div>';
+  return '<div id="mkRoot" data-tab="contacts">'+head+tabs+
   '<div class="mknote"><b>Before you message anyone:</b> only market to people who have agreed to hear from you (UK GDPR and PECR). Imported contacts start as <b>Unknown</b>. Mark them <b>Opted in</b> once they agree, and <b>Opted out</b> if they ask you to stop.</div>'+
   '<div class="mkbar"><input id="mkQ" type="search" placeholder="Search contacts" aria-label="Search contacts" value="'+esc(mkQuery)+'"><select id="mkConsent" aria-label="Filter by consent"><option value="">All consent</option><option value="yes">Opted in</option><option value="unknown">Unknown</option><option value="no">Opted out</option></select><select id="mkGroup" aria-label="Filter by group"></select>'+
   '<button type="button" class="btn" data-mkadd="1">Add contact</button><label class="btn ghost mkimp">Import<input type="file" id="mkImp" accept=".csv,.vcf,text/csv,text/vcard,text/x-vcard,text/plain" hidden></label><button type="button" class="btn ghost" data-mkexp="1">Export CSV</button><span id="mkCount" class="muted"></span></div>'+
-  '<div id="mkList"></div>';
+  '<div class="mkbar"><label class="mktpl">Message for the WhatsApp and Email buttons <select id="mkTpl" aria-label="Message"></select></label></div>'+
+  '<div id="mkList"></div></div>';
 }
 function mkGroups(){var g={};mkItems.forEach(function(c){if(c.group)g[c.group]=1});return Object.keys(g).sort()}
 function mkFiltered(){
@@ -567,12 +570,17 @@ function mkNamed(c){return !!(c.name&&/\p{L}/u.test(c.name))}
 function mkWa(c){var d=String(c.phone||'').replace(/\D/g,'');return d.length>=8?'https://wa.me/'+d:''}
 function mkLinks(c){
   var w=mkWa(c),h='';
+  var tp=mkTplCur();
+  if(w&&tp)w+='?text='+encodeURIComponent(mkFill(tp.text,c));
   if(w)h+='<a class="mklink wa" href="'+esc(w)+'" target="_blank" rel="noopener noreferrer" title="Open WhatsApp chat">WhatsApp</a>';
-  if(c.email)h+='<a class="mklink em" href="mailto:'+esc(c.email)+'" title="Send an email">Email</a>';
+  if(c.email)h+='<a class="mklink em" href="mailto:'+esc(c.email)+(tp?'?subject='+encodeURIComponent(tp.subject||tp.title)+'&body='+encodeURIComponent(mkFill(tp.text,c).replace(/\n/g,'\r\n')):'')+'" title="Send an email">Email</a>';
   return h||'<span class="muted">\u2014</span>';
 }
+function mkTplOpts(){var sel=$('#mkTpl');if(!sel)return;sel.innerHTML='<option value="">No message (blank)</option>'+mkTpls().map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===mkTplId?' selected':'')+'>'+esc(m.title)+'</option>'}).join('')}
 function mkList(){
+  if(mkTab==='messages'){mkMsgs();return}
   var box=$('#mkList');if(!box)return;
+  mkTplOpts();
   var gs=mkGroups(),key=gs.join('|')+'#'+mkGroup,sel=$('#mkGroup');
   if(sel&&mkGroupKey!==key){mkGroupKey=key;sel.innerHTML='<option value="">All groups</option>'+gs.map(function(g){return '<option value="'+esc(g)+'"'+(g===mkGroup?' selected':'')+'>'+esc(g)+'</option>'}).join('')}
   var cs=$('#mkConsent');if(cs&&cs.value!==mkConsent)cs.value=mkConsent;
@@ -697,6 +705,44 @@ function mkSaveForm(){
   if(mkEditId){mkItems=mkItems.map(function(x){return x.id===mkEditId?Object.assign({},x,c):x})}
   else mkItems.push(Object.assign({id:mkId(),added:Date.now()},c));
   mkSave();mkClose();mkList();toast('Saved');
+}
+
+/* ---------- marketing messages ---------- */
+var MK_SIG='Atik Raza\nMortgage and Protection Adviser\nAccess Financial Services',
+    MK_FOOT='Your home may be repossessed if you do not keep up repayments on your mortgage.\nIf you would rather I did not message you, just reply STOP.';
+var MK_DEFAULTS=[
+ {id:'d1',title:'Home purchase',subject:'Helping with your home purchase',text:"Assalamu Alaikum {name},\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser at Access Financial Services. If you are thinking about buying a home, whether it is your first or your next, I would be glad to help with your options, what you may be able to borrow, and each step from start to finish.\n\nThere is no obligation. Just message me back or call me for a friendly, no-pressure chat.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d2',title:'Remortgage',subject:'Is your mortgage deal ending soon?',text:"Assalamu Alaikum {name},\n\nI hope you are well, insha'Allah.\n\nIf your fixed rate or mortgage deal is due to end in the next 6 to 12 months, now is a good time to look at your options. If you do nothing, you may move onto your lender's standard variable rate, which is often higher.\n\nI am Atik, a mortgage adviser at Access Financial Services, and I would be happy to review your mortgage with you. There is no obligation.\n\nJust reply here and I will get back to you.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d3',title:'First-time buyer',subject:'Buying your first home',text:"Assalamu Alaikum {name},\n\nI hope this message finds you and your family in good health, insha'Allah.\n\nBuying a first home can feel overwhelming, and there is a lot to understand about deposits, affordability and the process. I am Atik, a mortgage adviser at Access Financial Services, and I help first-time buyers take it one step at a time.\n\nIf you or someone close to you is thinking about it, I would be glad to have a relaxed chat with no obligation.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d4',title:'Ask for a referral',subject:'Could you help someone you know?',text:"Assalamu Alaikum {name},\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser at Access Financial Services. Do you know a family member, friend or colleague who is looking to buy a home or remortgage? If so, I would be grateful if you could pass on my details, and I would be happy to help them.\n\nThank you for your time and support.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d5',title:'Gentle follow-up',subject:'Just following up',text:"Assalamu Alaikum {name},\n\nJust a quick note after my last message, in case it got lost. If a home purchase or remortgage is on your mind, I am happy to chat whenever suits you. No pressure at all.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT}
+];
+var mkMsgsDoc=null,mkTplId='',mkMsgEdit=null,mkDraft=null;
+function mkTpls(){return mkMsgsDoc||MK_DEFAULTS}
+function mkTplSave(list){mkMsgsDoc=list;return write('mkm',function(){return mkCol.doc('messages').set({items:list,updatedAt:Date.now()})})}
+function mkFirst(c){var n=(c&&c.name||'').trim();return mkNamed(c)?n.split(/\s+/)[0]:''}
+function mkFill(t,c){var f=mkFirst(c);return String(t||'').replace(/ ?\{name\}/g,f?' '+f:'')}
+function mkTplCur(){return mkTpls().filter(function(x){return x.id===mkTplId})[0]||null}
+function mkMsgs(){
+  var box=$('#mkMsgs');if(!box)return;
+  var l=mkDraft?[mkDraft].concat(mkTpls()):mkTpls();
+  box.innerHTML='<div class="mknote">Use <b>{name}</b> where you want the contact\u2019s first name. If a contact has no name, it is left out. On the Contacts tab, choose a message and the WhatsApp and Email buttons will open with it filled in. Each message includes the usual mortgage warning and a way to opt out.</div>'+
+  '<div class="mkbar"><button type="button" class="btn" data-mkmnew="1">New message</button>'+(mkMsgsDoc?'<button type="button" class="btn ghost" data-mkmreset="1">Restore the standard messages</button>':'')+'</div>'+
+  (l.length?l.map(function(m){
+    if(mkMsgEdit===m.id)return '<div class="mkcard"><label class="f">Title<input id="mkm-title" value="'+esc(m.title)+'"></label><label class="f">Email subject<input id="mkm-subject" value="'+esc(m.subject||'')+'"></label><label class="f">Message<textarea id="mkm-text" rows="12">'+esc(m.text)+'</textarea></label><div class="mkact"><button type="button" class="btn" data-mkmsave="'+esc(m.id)+'">Save</button><button type="button" class="btn ghost" data-mkmcancel="1">Cancel</button><button type="button" class="btn ghost" data-mkmdel="'+esc(m.id)+'" style="margin-left:auto">Delete</button></div></div>';
+    return '<div class="mkcard"><div class="mkch"><b>'+esc(m.title)+'</b><span class="muted">'+esc(m.subject||'')+'</span></div><pre class="mkpre">'+esc(m.text)+'</pre><div class="mkact"><button type="button" class="btn ghost sm" data-mkmcopy="'+esc(m.id)+'">Copy message</button><button type="button" class="btn ghost sm" data-mkmedit="'+esc(m.id)+'">Edit</button></div></div>';
+  }).join(''):'<div class="muted">No messages. Use New message or Restore the standard messages.</div>');
+}
+function mkMsgAct(t){
+  var g=function(a){var e=t.closest('['+a+']');return e?e.getAttribute(a):null},v;
+  if(g('data-mkmnew')!==null){var id='c'+Date.now().toString(36);mkDraft={id:id,title:'New message',subject:'',text:"Assalamu Alaikum {name},\n\n\n\n"+MK_SIG+"\n\n"+MK_FOOT};mkMsgEdit=id;mkMsgs();return true}
+  if(g('data-mkmreset')!==null){if(!window.confirm('Replace your messages with the standard ones?'))return true;mkMsgsDoc=null;write('mkm',function(){return mkCol.doc('messages').delete()});mkMsgEdit=null;mkMsgs();return true}
+  if((v=g('data-mkmedit'))){mkMsgEdit=v;mkMsgs();return true}
+  if(g('data-mkmcancel')!==null){mkMsgEdit=null;mkDraft=null;mkMsgs();return true}
+  if((v=g('data-mkmsave'))){var ti=($('#mkm-title').value||'').trim()||'Message';var nm={id:v,title:ti,subject:($('#mkm-subject').value||'').trim(),text:$('#mkm-text').value},cur=mkTpls(),has=cur.some(function(m){return m.id===v});mkTplSave(has?cur.map(function(m){return m.id===v?nm:m}):[nm].concat(cur));mkDraft=null;mkMsgEdit=null;mkMsgs();toast('Message saved');return true}
+  if((v=g('data-mkmdel'))){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return true}if(mkDraft&&mkDraft.id===v){mkDraft=null;mkMsgEdit=null;mkMsgs();return true}mkTplSave(mkTpls().filter(function(m){return m.id!==v}));if(mkTplId===v)mkTplId='';mkMsgEdit=null;mkMsgs();toast('Message deleted');return true}
+  if((v=g('data-mkmcopy'))){var m=mkTpls().filter(function(x){return x.id===v})[0];if(m){var txt=mkFill(m.text,null);if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('Message copied')},function(){toast('Could not copy')});else toast('Could not copy')}return true}
+  return false;
 }
 
 /* ---------- birthdays ---------- */
@@ -1025,7 +1071,7 @@ function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var bt=bdCounts(bdPeople().list).today;
   var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
-  s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Settings</button></div>';
+  s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Settings</button><button type="button" class="sbtn logout" id="logoutBtn">Log out</button></div>';
 }
 function renderRem(){
   var s=$('#homeRem');if(!s)return;
@@ -1214,7 +1260,7 @@ function backupAll(){
   if(!loaded||!cases.length){toast('No cases to back up yet');return}
   claude.use('downloads').then(function(dl){
     if(!dl){toast('Downloads are not available in this view');return}
-    var payload={app:'Mortgage Case Desk',exportedAt:new Date().toISOString(),count:cases.length,cases:cases,notebook:notes,appointments:appts,marketing:[{id:'contacts',items:mkItems}]};
+    var payload={app:'Mortgage Case Desk',exportedAt:new Date().toISOString(),count:cases.length,cases:cases,notebook:notes,appointments:appts,marketing:[{id:'contacts',items:mkItems}].concat(mkMsgsDoc?[{id:'messages',items:mkMsgsDoc}]:[])};
     return dl.save({filename:'case-desk-backup-'+iso(TODAY)+'.json',data:JSON.stringify(payload,null,2)}).then(function(){toast('Backup saved: '+cases.length+' cases')},function(e){if(e&&e.code!=='declined')toast('Could not save the backup')});
   });
 }
@@ -1267,6 +1313,8 @@ document.addEventListener('click',function(e){
   if(t.id==='apOv'){apClose();return}
   if(t.id==='bookBtn'){apOpen(null,iso(TODAY),openId);return}
   var bdf=t.closest&&t.closest('[data-bdf]');if(bdf){bdFilter=bdf.getAttribute('data-bdf');bdRender();return}
+  var mkt=t.closest&&t.closest('[data-mktab]');if(mkt){mkTab=mkt.getAttribute('data-mktab');mkMsgEdit=null;render();return}
+  if(mkMsgAct(t))return;
   if(t.closest&&t.closest('[data-mkadd]')){mkOpen(null);return}
   if(t.closest&&t.closest('[data-mkexp]')){mkExport();return}
   var mke=t.closest&&t.closest('[data-mkedit]');if(mke&&!(t.closest&&t.closest('a'))){mkOpen(mke.getAttribute('data-mkedit'));return}
@@ -1391,6 +1439,7 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
+  if(t.id==='mkTpl'){mkTplId=t.value;mkList();return}
   if(t.id==='mkConsent'){mkConsent=t.value;mkList();return}
   if(t.id==='mkGroup'){mkGroup=t.value;mkList();return}
   if(t.id==='mkImp'){if(t.files&&t.files[0])mkImport(t.files[0]);t.value='';return}
@@ -1635,7 +1684,7 @@ claude.use('db').then(function(d){
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
   mkCol=db.collection('marketing');
-  mkCol.onSnapshot(function(s){var d=s.docs.filter(function(x){return x.id==='contacts'})[0];mkItems=(d&&d.data().items)||[];if(view==='marketing'&&!$('#mkOv'))mkList()});
+  mkCol.onSnapshot(function(s){var d=s.docs.filter(function(x){return x.id==='contacts'})[0];mkItems=(d&&d.data().items)||[];var dm=s.docs.filter(function(x){return x.id==='messages'})[0];mkMsgsDoc=(dm&&dm.data().items)||null;if(view==='marketing'&&!$('#mkOv')&&!mkMsgEdit)mkList()});
   apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();if(view==='tasks'&&!$('#apOv')){var hc2=$('#homeCal');if(hc2)hc2.innerHTML=apHome()}var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
   nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};bdCfg.islamic=(tp&&tp.islamic&&tp.islamic.length)?tp.islamic:null;var gdoc=all.filter(function(x){return x.id==='bday-gender'})[0];bdGen=(gdoc&&gdoc.map)||{};notes=all.filter(function(x){return x.id!=='bday-template'&&x.id!=='bday-gender'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){

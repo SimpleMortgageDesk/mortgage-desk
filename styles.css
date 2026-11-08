@@ -469,3 +469,12 @@ header.top .in{padding-block:12px}}
 .mklink{display:inline-block;padding:3px 9px;border-radius:12px;font-size:12px;font-weight:600;text-decoration:none;margin-right:5px}
 .mklink.wa{background:#e3f4e8;color:#1b5e20}.mklink.em{background:#e6eef9;color:#1a4b8c}
 .mklink:hover{filter:brightness(.95);text-decoration:underline}
+#sideTools .sbtn.logout{margin:0;justify-content:center;background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+#sideTools .sbtn.logout:hover{background:var(--surface2);color:var(--ink)}
+.mktpl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.mktpl select{padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;color:var(--ink);max-width:100%}
+.mkcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.mkcard label.f{display:block;margin-bottom:10px}
+.mkcard input,.mkcard textarea{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.mkch{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:8px}
+.mkpre{white-space:pre-wrap;font:inherit;margin:0 0 10px;color:var(--ink);overflow-wrap:anywhere}
