@@ -435,9 +435,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 13:13";</script>
-<script src="config.js?v=202611081313"></script>
-<script src="sync.js?v=202611081313"></script>
+<script>window.MD_BUILD="2026-11-08 13:30";</script>
+<script src="config.js?v=202611081330"></script>
+<script src="sync.js?v=202611081330"></script>
 <script>
 (function(){
 'use strict';
@@ -650,7 +650,7 @@ function renderNav(){updTrayBtn();
   var mk=function(list){return list.map(function(i){
     return '<button data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='reminders'&&dc?'<span class="badge">'+dc+' overdue</span>':'')+(i[0]==='tasks'&&tdc?'<span class="badge">'+tdc+' overdue</span>':'')+(i[0]==='birthdays'&&bdCounts(bdPeople().list).today?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bdCounts(bdPeople().list).today+' today</span>':'')+(i[0]==='appointments'&&apTodayN()?'<span class="badge" style="background:var(--accent-soft,#dbe9f8);color:var(--accent)">'+apTodayN()+' today</span>':'')+'</button>';
   }).join('')};
-  $('#nav').innerHTML=mk(items.filter(function(i){return !tools[i[0]]}));var n2=$('#nav2');if(n2)n2.innerHTML=mk(items.filter(function(i){return tools[i[0]]}));
+  var hideRem=sideVisible();$('#nav').innerHTML=mk(items.filter(function(i){return !tools[i[0]]&&!(hideRem&&i[0]==='reminders')}));var n2=$('#nav2');if(n2)n2.innerHTML=mk(items.filter(function(i){return tools[i[0]]}));
 }
 
 function gbp2(n){return '£'+n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -1292,9 +1292,10 @@ function trItem(x){
 var sideOn=true;
 var mqSide=window.matchMedia('(min-width:760px)');
 function placeAcct(){}
-function applySide(){document.body.classList.toggle('side-on',sideOn);placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
+function sideVisible(){var sd=document.getElementById('side');return !!sd&&document.body.classList.contains('side-on')&&getComputedStyle(sd).display!=='none'}
+function applySide(){document.body.classList.toggle('side-on',sideOn);if(sideVisible()&&view==='reminders'){view='tasks';render()}renderNav();placeAcct();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');renderSide()}
 if(mqSide.addEventListener)mqSide.addEventListener('change',function(){applySide()});
-window.addEventListener('resize',function(){var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
+window.addEventListener('resize',function(){if(sideVisible()&&view==='reminders'){view='tasks';render()}renderNav();var h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')});
 function sideItem(e,g){
   return '<div class="si'+(g==='over'?' over':'')+'"><div style="min-width:0"><button type="button" class="lnk st" data-open="'+e.id+'">'+esc(e.who)+'</button><div class="sc">'+esc(e.label)+'</div><div class="sd">'+fd(e.date)+' · '+esc(rel(e.date))+'</div></div></div>';
 }
