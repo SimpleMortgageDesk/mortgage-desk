@@ -384,7 +384,7 @@
     if (line || !out.length) out.push(line);
     return out;
   }
-  function pdfBuild(items, footer) {
+  function pdfBuild(items, footer, pw) {
     var W = 595, H = 842, ML = 42, TOP = 800, BOT = 54, pages = [[]], y = TOP;
     function newPage() { pages.push([]); y = TOP; }
     items.forEach(function (it) {
@@ -398,7 +398,7 @@
       });
       y -= it.gap || 0;
     });
-    var out = '%PDF-1.4\n', offs = [], n = pages.length;
+    var out = '%PDF-1.4\n', offs = [], n = pages.length, enc = pw ? pdfEncInit(pw) : null;
     function obj(i, body) { offs[i] = out.length; out += i + ' 0 obj\n' + body + '\nendobj\n'; }
     obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
     var kids = pages.map(function (p, i) { return (5 + 2 * i) + ' 0 R'; }).join(' ');
@@ -410,16 +410,165 @@
       p.forEach(function (l) { cs += 'BT /' + (l.b ? 'F2' : 'F1') + ' ' + l.sz + ' Tf 1 0 0 1 ' + l.x + ' ' + l.y.toFixed(1) + ' Tm (' + pdfStr(l.t) + ') Tj ET\n'; });
       cs += 'BT /F1 8 Tf 1 0 0 1 ' + ML + ' 30 Tm (' + pdfStr(footer + '  |  page ' + (i + 1) + ' of ' + n) + ') Tj ET\n';
       obj(5 + 2 * i, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + W + ' ' + H + '] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' + (6 + 2 * i) + ' 0 R >>');
-      obj(6 + 2 * i, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + 'endstream');
+      if (enc) { var eb = pdfObjEnc(enc, 6 + 2 * i, strB(cs)), es = ''; for (var q = 0; q < eb.length; q++) es += String.fromCharCode(eb[q]); cs = es; }
+      obj(6 + 2 * i, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream');
     });
-    var total = 5 + 2 * n, xref = out.length;
+    var total = 5 + 2 * n;
+    if (enc) { obj(total, '<< /Filter /Standard /V 4 /R 4 /Length 128 /CF << /StdCF << /CFM /AESV2 /AuthEvent /DocOpen /Length 16 >> >> /StmF /StdCF /StrF /StdCF /O <' + enc.O + '> /U <' + enc.U + '> /P -4 >>'); total++; }
+    var xref = out.length;
     out += 'xref\n0 ' + total + '\n0000000000 65535 f \n';
     for (var k = 1; k < total; k++) out += ('0000000000' + offs[k]).slice(-10) + ' 00000 n \n';
-    out += 'trailer\n<< /Size ' + total + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+    out += 'trailer\n<< /Size ' + total + ' /Root 1 0 R' + (enc ? ' /Encrypt ' + (total - 1) + ' 0 R /ID [<' + enc.id + '><' + enc.id + '>]' : '') + ' >>\nstartxref\n' + xref + '\n%%EOF\n';
     var u = new Uint8Array(out.length); for (var m = 0; m < out.length; m++) u[m] = out.charCodeAt(m) & 255;
     return u;
   }
-  function bkPdf(all, stamp) {
+  /* ---------- password protection for backups: AES, MD5, RC4, encrypted PDF, AES-256 ZIP ---------- */
+  var AES_S = null;
+  function aesInit() {
+    if (AES_S) return;
+    var s = new Uint8Array(256), p = 1, q = 1, rot = function (x, n) { return ((x << n) | (x >> (8 - n))) & 255; };
+    do {
+      p = (p ^ (p << 1) ^ ((p & 0x80) ? 0x11b : 0)) & 255;
+      q ^= q << 1; q &= 255; q ^= q << 2; q &= 255; q ^= q << 4; q &= 255; if (q & 0x80) q ^= 0x09;
+      s[p] = (q ^ rot(q, 1) ^ rot(q, 2) ^ rot(q, 3) ^ rot(q, 4) ^ 0x63) & 255;
+    } while (p !== 1);
+    s[0] = 0x63; AES_S = s;
+  }
+  function aesKey(key) {
+    aesInit();
+    var nk = key.length / 4, nr = nk + 6, w = new Uint8Array(16 * (nr + 1)), i, t = new Uint8Array(4), rc = 1, k;
+    w.set(key);
+    for (i = nk; i < 4 * (nr + 1); i++) {
+      t[0] = w[4 * i - 4]; t[1] = w[4 * i - 3]; t[2] = w[4 * i - 2]; t[3] = w[4 * i - 1];
+      if (i % nk === 0) {
+        var x = t[0]; t[0] = AES_S[t[1]] ^ rc; t[1] = AES_S[t[2]]; t[2] = AES_S[t[3]]; t[3] = AES_S[x];
+        rc = ((rc << 1) ^ ((rc & 0x80) ? 0x11b : 0)) & 255;
+      } else if (nk > 6 && i % nk === 4) { t[0] = AES_S[t[0]]; t[1] = AES_S[t[1]]; t[2] = AES_S[t[2]]; t[3] = AES_S[t[3]]; }
+      for (k = 0; k < 4; k++) w[4 * i + k] = w[4 * (i - nk) + k] ^ t[k];
+    }
+    return { w: w, nr: nr };
+  }
+  function aesBlock(K, inp) {
+    var s = new Uint8Array(16), t = new Uint8Array(16), r, i, xt = function (x) { return ((x << 1) ^ ((x & 0x80) ? 0x1b : 0)) & 255; };
+    for (i = 0; i < 16; i++) s[i] = inp[i] ^ K.w[i];
+    for (r = 1; r <= K.nr; r++) {
+      for (i = 0; i < 16; i++) t[i] = AES_S[s[i]];
+      s[0] = t[0]; s[1] = t[5]; s[2] = t[10]; s[3] = t[15]; s[4] = t[4]; s[5] = t[9]; s[6] = t[14]; s[7] = t[3];
+      s[8] = t[8]; s[9] = t[13]; s[10] = t[2]; s[11] = t[7]; s[12] = t[12]; s[13] = t[1]; s[14] = t[6]; s[15] = t[11];
+      if (r < K.nr) {
+        for (i = 0; i < 16; i += 4) {
+          var a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3], x = a0 ^ a1 ^ a2 ^ a3;
+          s[i] = a0 ^ x ^ xt(a0 ^ a1); s[i + 1] = a1 ^ x ^ xt(a1 ^ a2); s[i + 2] = a2 ^ x ^ xt(a2 ^ a3); s[i + 3] = a3 ^ x ^ xt(a3 ^ a0);
+        }
+      }
+      for (i = 0; i < 16; i++) s[i] ^= K.w[16 * r + i];
+    }
+    return s;
+  }
+  function aesCbcPad(keyBytes, data) {
+    var K = aesKey(keyBytes), iv = crypto.getRandomValues(new Uint8Array(16)), n = data.length, pad = 16 - (n % 16), tot = n + pad;
+    var out = new Uint8Array(16 + tot), prev = iv, blk = new Uint8Array(16), i, j;
+    out.set(iv);
+    for (i = 0; i < tot; i += 16) {
+      for (j = 0; j < 16; j++) blk[j] = (i + j < n ? data[i + j] : pad) ^ prev[j];
+      prev = aesBlock(K, blk); out.set(prev, 16 + i);
+    }
+    return out;
+  }
+  function aesCtrLE(keyBytes, data) {
+    var K = aesKey(keyBytes), out = new Uint8Array(data.length), ctr = new Uint8Array(16), i, j, ks;
+    for (i = 0; i < data.length; i += 16) {
+      for (j = 0; j < 16; j++) { ctr[j] = (ctr[j] + 1) & 255; if (ctr[j]) break; }
+      ks = aesBlock(K, ctr);
+      for (j = 0; j < 16 && i + j < data.length; j++) out[i + j] = data[i + j] ^ ks[j];
+    }
+    return out;
+  }
+  function md5(b) {
+    var S = [7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21], K = [], i, j;
+    for (i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) >>> 0;
+    var n = b.length, tot = (((n + 8) >> 6) + 1) * 64, m = new Uint8Array(tot);
+    m.set(b); m[n] = 0x80;
+    var bl = n * 8; m[tot - 8] = bl & 255; m[tot - 7] = (bl >>> 8) & 255; m[tot - 6] = (bl >>> 16) & 255; m[tot - 5] = (bl >>> 24) & 255;
+    var a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+    for (var o = 0; o < tot; o += 64) {
+      var M = [];
+      for (i = 0; i < 16; i++) M[i] = m[o + 4 * i] | (m[o + 4 * i + 1] << 8) | (m[o + 4 * i + 2] << 16) | (m[o + 4 * i + 3] << 24);
+      var A = a0, B = b0, C = c0, D = d0, F, g;
+      for (i = 0; i < 64; i++) {
+        if (i < 16) { F = (B & C) | (~B & D); g = i; }
+        else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+        else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+        else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+        F = (F + A + K[i] + M[g]) | 0; A = D; D = C; C = B; B = (B + ((F << S[i]) | (F >>> (32 - S[i])))) | 0;
+      }
+      a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+    }
+    var out = new Uint8Array(16), v = [a0, b0, c0, d0];
+    for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) out[4 * i + j] = (v[i] >>> (8 * j)) & 255;
+    return out;
+  }
+  function rc4(key, data) {
+    var s = [], i, j = 0, t, out = new Uint8Array(data.length);
+    for (i = 0; i < 256; i++) s[i] = i;
+    for (i = 0; i < 256; i++) { j = (j + s[i] + key[i % key.length]) & 255; t = s[i]; s[i] = s[j]; s[j] = t; }
+    i = 0; j = 0;
+    for (var k = 0; k < data.length; k++) { i = (i + 1) & 255; j = (j + s[i]) & 255; t = s[i]; s[i] = s[j]; s[j] = t; out[k] = data[k] ^ s[(s[i] + s[j]) & 255]; }
+    return out;
+  }
+  var PDF_PAD = [0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41, 0x64, 0x00, 0x4E, 0x56, 0xFF, 0xFA, 0x01, 0x08, 0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80, 0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A];
+  function catB() { var n = 0, i, k = 0, a; for (i = 0; i < arguments.length; i++) n += arguments[i].length; a = new Uint8Array(n); for (i = 0; i < arguments.length; i++) { a.set(arguments[i], k); k += arguments[i].length; } return a; }
+  function hexB(u) { var h = ''; for (var i = 0; i < u.length; i++) h += ('0' + u[i].toString(16)).slice(-2); return h; }
+  function strB(s) { var u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; }
+  function pdfEncInit(pw) {
+    var pb = strB(String(pw)).slice(0, 32), pad = new Uint8Array(32), i, r;
+    pad.set(pb); pad.set(PDF_PAD.slice(0, 32 - pb.length), pb.length);
+    var h = md5(pad); for (i = 0; i < 50; i++) h = md5(h);
+    var ok = h.slice(0, 16), O = rc4(ok, pad);
+    for (i = 1; i <= 19; i++) { var kk = ok.map(function (x) { return x ^ i; }); O = rc4(kk, O); }
+    var P = new Uint8Array([0xFC, 0xFF, 0xFF, 0xFF]), id = crypto.getRandomValues(new Uint8Array(16));
+    var key = md5(catB(pad, O, P, id)); for (i = 0; i < 50; i++) key = md5(key.slice(0, 16)); key = key.slice(0, 16);
+    var U = rc4(key, md5(catB(new Uint8Array(PDF_PAD), id)));
+    for (i = 1; i <= 19; i++) { var k2 = key.map(function (x) { return x ^ i; }); U = rc4(k2, U); }
+    U = catB(U, new Uint8Array(16));
+    return { key: key, O: hexB(O), U: hexB(U), id: hexB(id) };
+  }
+  function pdfObjEnc(enc, num, bytes) {
+    var k = md5(catB(enc.key, new Uint8Array([num & 255, (num >> 8) & 255, (num >> 16) & 255, 0, 0]), strB('sAlT')));
+    return aesCbcPad(k.slice(0, 16), bytes);
+  }
+  var CRC_T = null;
+  function crc32(b) {
+    if (!CRC_T) { CRC_T = []; for (var n = 0, c; n < 256; n++) { c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_T[n] = c >>> 0; } }
+    var c2 = 0xFFFFFFFF; for (var i = 0; i < b.length; i++) c2 = CRC_T[(c2 ^ b[i]) & 255] ^ (c2 >>> 8);
+    return (c2 ^ 0xFFFFFFFF) >>> 0;
+  }
+  async function zipAesEntry(pw, data) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), pk = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    var km = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 1000, hash: 'SHA-1' }, pk, 528));
+    var ek = km.slice(0, 32), hk = km.slice(32, 64), pv = km.slice(64, 66), ct = aesCtrLE(ek, data);
+    var hm = await crypto.subtle.importKey('raw', hk, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    var mac = new Uint8Array(await crypto.subtle.sign('HMAC', hm, ct)).slice(0, 10);
+    return catB(salt, pv, ct, mac);
+  }
+  async function bkZip(entries, pw) {
+    var now = new Date(), dt = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF, dd = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+    var parts = [], central = [], off = 0;
+    var u16 = function (v) { return new Uint8Array([v & 255, (v >> 8) & 255]); }, u32 = function (v) { return new Uint8Array([v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]); };
+    var extra = catB(u16(0x9901), u16(7), u16(2), strB('AE'), new Uint8Array([3]), u16(0));
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i], nm = strB(e.name), body = await zipAesEntry(pw, e.data);
+      var lh = catB(u32(0x04034b50), u16(51), u16(0x0801), u16(99), u16(dt), u16(dd), u32(0), u32(body.length), u32(e.data.length), u16(nm.length), u16(extra.length), nm, extra);
+      parts.push(lh, body);
+      central.push(catB(u32(0x02014b50), u16(51), u16(51), u16(0x0801), u16(99), u16(dt), u16(dd), u32(0), u32(body.length), u32(e.data.length), u16(nm.length), u16(extra.length), u16(0), u16(0), u16(0), u32(0), u32(off), nm, extra));
+      off += lh.length + body.length;
+    }
+    var cd = catB.apply(null, central), end = catB(u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length), u32(cd.length), u32(off), u16(0));
+    return catB.apply(null, parts.concat([cd, end]));
+  }
+
+  function bkPw() { return ls('md.bkpw') || ''; }
+  function bkPdf(all, stamp, pw) {
     var it = [];
     it.push({ t: 'Mortgage Desk - case backup', b: 1, sz: 18, gap: 6 });
     it.push({ t: 'Created ' + stamp + '. ' + all.length + ' case' + (all.length === 1 ? '' : 's') + '.', sz: 10, gap: 10 });
@@ -453,7 +602,7 @@
       var ps = bkLog(c.protection);
       it.push({ t: 'Protection notes', b: 1, sz: 10.5, gap: 1 }); if (!ps.length) it.push({ t: 'None', ind: 6 }); ps.forEach(function (t) { it.push({ t: t, ind: 6, gap: 2 }); });
     });
-    return pdfBuild(it, 'Mortgage Desk backup ' + stamp);
+    return pdfBuild(it, 'Mortgage Desk backup ' + stamp, pw);
   }
   function bkIdb() { return new Promise(function (res) { try { var q = indexedDB.open('md-bk', 1); q.onupgradeneeded = function () { q.result.createObjectStore('h'); }; q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } }); }
   var bkDirMem = null;
@@ -500,6 +649,7 @@
     if (bkRunning) return null;
     var cfg = bkCfg();
     if (!cfg.dev && !cfg.od) return { none: true };
+    var pw = bkPw(); if (!pw) return { nopw: true };
     bkRunning = true;
     try {
       var pre = null;
@@ -507,10 +657,11 @@
       var all = bkCases(), d = new Date(), pad = function (n) { return ('0' + n).slice(-2); };
       var day = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
       var stamp = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-      var files = [
-        { name: 'Mortgage-Desk-Cases-' + day + '.pdf', type: 'application/pdf', blob: new Blob([bkPdf(all, stamp)], { type: 'application/pdf' }) },
-        { name: 'Mortgage-Desk-Cases-' + day + '.csv', type: 'text/csv', blob: new Blob([bkCsv(all)], { type: 'text/csv;charset=utf-8' }) }
-      ];
+      var zipBytes = await bkZip([
+        { name: 'Mortgage-Desk-Cases-' + day + '.pdf', data: bkPdf(all, stamp, pw) },
+        { name: 'Mortgage-Desk-Cases-' + day + '.csv', data: new TextEncoder().encode(bkCsv(all)) }
+      ], pw);
+      var files = [{ name: 'Mortgage-Desk-Cases-' + day + '.zip', type: 'application/zip', blob: new Blob([zipBytes], { type: 'application/zip' }) }];
       var res = { at: Date.now(), count: all.length };
       if (cfg.dev) res.dev = await bkToDevice(files, interactive, pre);
       if (cfg.od) res.od = await bkToOneDrive(files);
@@ -523,7 +674,7 @@
   }
   function bkTick() {
     var cfg = bkCfg();
-    if (!cfg.auto || (!cfg.dev && !cfg.od) || !tok() || !Object.keys(mem.cases).length) return;
+    if (!cfg.auto || (!cfg.dev && !cfg.od) || !bkPw() || !tok() || !Object.keys(mem.cases).length) return;
     var now = Date.now();
     if (now - cfg.last < 86400000) return;
     if (now - cfg.tried < 3600000) return;
@@ -551,10 +702,13 @@
       var c = bkCfg(), pick = bkCanPick();
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PDF/CSV Case Backup</h2><button class="btn ghost" data-b="close">Close</button></div>' +
-        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF (to read or print) and a CSV (opens in Excel). Both places get the same two files.</p>' +
+        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF (to read or print) and a CSV (opens in Excel), together in one password-protected ZIP file. Every place you tick gets the same file.</p>' +
         '<h3 style="margin:14px 0 6px;font-size:15px">Where to save</h3>' +
-        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkDev"' + (c.dev ? ' checked' : '') + ' style="margin-top:3px"><span><b>This computer</b><br><span style="color:#58697A;font-size:13px">' + (pick ? (dirName ? 'Folder: <b>' + esc(dirName) + ' / Mortgage Desk Backups</b>' : 'No folder chosen yet.') + '</span><br><button class="btn ghost sm" data-b="pick" style="margin-top:6px">' + (dirName ? 'Change folder' : 'Choose folder') + '</button>' : 'This browser cannot pick a folder (phones and some browsers). Back up now will download the two files to this device instead.</span>') + '</span></label>' +
+        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkDev"' + (c.dev ? ' checked' : '') + ' style="margin-top:3px"><span><b>This computer</b><br><span style="color:#58697A;font-size:13px">' + (pick ? (dirName ? 'Folder: <b>' + esc(dirName) + ' / Mortgage Desk Backups</b>' : 'No folder chosen yet.') + '</span><br><button class="btn ghost sm" data-b="pick" style="margin-top:6px">' + (dirName ? 'Change folder' : 'Choose folder') + '</button>' : 'This browser cannot pick a folder (phones and some browsers). Back up now will download the ZIP file to this device instead.</span>') + '</span></label>' +
         '<label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input type="checkbox" id="bkOd"' + (c.od ? ' checked' : '') + ' style="margin-top:3px"><span><b>OneDrive</b><br><span style="color:#58697A;font-size:13px">Folder: <b>Apps / Mortgage Desk / Backups</b> (the app can only use its own OneDrive folder).</span></span></label>' +
+        '<h3 style="margin:16px 0 6px;font-size:15px">Backup password</h3>' +
+        '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (bkPw() ? 'A backup password is set. You need it to open the ZIP file, and the PDF inside uses the same password. This is separate from your Microsoft password.' : 'Set a password (at least 8 characters) before you can back up. It is separate from your Microsoft password.') + ' It is kept on this device so automatic backups can run. If you lose it, the backup files cannot be opened, so keep a copy somewhere safe.</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input id="bkPw" type="password" autocomplete="new-password" placeholder="' + (bkPw() ? 'New password' : 'Backup password') + '" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"><button class="btn" data-b="pw">' + (bkPw() ? 'Change password' : 'Save password') + '</button></div>' +
         '<h3 style="margin:16px 0 6px;font-size:15px">Automatic backup</h3>' +
         '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkAuto"' + (c.auto ? ' checked' : '') + ' style="margin-top:3px"><span>Back up automatically every 24 hours<br><span style="color:#58697A;font-size:13px">Runs while the app is open (on any signed-in device). If the app was closed, it runs the next time you open it.</span></span></label>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 8px"><button class="btn" data-b="run">Back up now</button></div>' +
@@ -572,10 +726,17 @@
     ov.addEventListener('click', async function (e) {
       var b = e.target.closest && e.target.closest('[data-b]'); if (!b) return; b = b.getAttribute('data-b');
       if (b === 'close') ov.remove();
+      else if (b === 'pw') {
+        var pv = ($('bkPw') || {}).value || '';
+        if (pv.length < 8) { say('The password needs at least 8 characters.'); return; }
+        if (/[^\x20-\x7E]/.test(pv)) { say('Please use letters, numbers and ordinary symbols only.'); return; }
+        lset('md.bkpw', pv); draw(); say('Backup password saved. Remember it: you need it to open your backups.');
+      }
       else if (b === 'pick') {
         try { var h = await window.showDirectoryPicker({ mode: 'readwrite' }); await bkPutDir(h); dirName = h.name; var c = bkCfg(); c.dev = true; bkSave(c); draw(); say('Folder chosen.'); }
         catch (x) { if (!x || x.name !== 'AbortError') say('Could not choose that folder.'); }
       } else if (b === 'run') {
+        if (!bkPw()) { say('Set a backup password first.'); return; }
         var c2 = bkCfg(); c2.dev = !!($('bkDev') || {}).checked; c2.od = !!($('bkOd') || {}).checked; c2.auto = !!($('bkAuto') || {}).checked; bkSave(c2);
         if (!c2.dev && !c2.od) { say('Tick at least one place to save to.'); return; }
         if (c2.dev && bkCanPick() && !(await bkGetDir())) { say('Choose a folder on this computer first.'); return; }
@@ -583,6 +744,7 @@
         var r = await bkRun(true);
         bkPaint();
         if (r && r.none) say('Tick at least one place to save to.');
+        else if (r && r.nopw) say('Set a backup password first.');
         else if (r) say(((!r.dev || r.dev.ok) && (!r.od || r.od.ok)) ? 'Backup finished.' : 'Backup finished with a problem. See below.');
       }
     });
