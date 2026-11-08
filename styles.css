@@ -478,3 +478,7 @@ header.top .in{padding-block:12px}}
 .mkcard input,.mkcard textarea{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
 .mkch{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:8px}
 .mkpre{white-space:pre-wrap;font:inherit;margin:0 0 10px;color:var(--ink);overflow-wrap:anywhere}
+.mkrow{margin:-4px 0 12px}
+.mksend{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.mksm{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px}
+.mkpanel{width:min(560px,100%)}

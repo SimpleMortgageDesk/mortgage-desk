@@ -689,13 +689,23 @@ function mkExport(){
   setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
   toast('Exported '+l.length+' contact'+(l.length===1?'':'s'));
 }
+function mkSendBox(c){
+  var w=mkWa(c),h='<div class="mksend"><b>Send a message</b><div class="muted" style="font-size:12px;margin:2px 0 8px">'+(w||c.email?'Pick a message. It opens in WhatsApp or your email app, filled in with '+(mkFirst(c)?esc(mkFirst(c))+'\u2019s name':'a greeting')+'. Check consent first.':'Add a phone number or email to send a message.')+'</div>';
+  mkTpls().forEach(function(m){
+    var t=mkFill(m.text,c),pv=t.replace(/\s+/g,' ').slice(0,150)+(t.length>150?'\u2026':'');
+    h+='<div class="mksm"><div class="mkch"><b>'+esc(m.title)+'</b></div><div class="muted" style="font-size:12px;margin-bottom:6px">'+esc(pv)+'</div><div>'+
+      (w?'<a class="mklink wa" href="'+esc(w+'?text='+encodeURIComponent(t))+'" target="_blank" rel="noopener noreferrer">WhatsApp</a>':'')+
+      (c.email?'<a class="mklink em" href="mailto:'+esc(c.email)+'?subject='+encodeURIComponent(m.subject||m.title)+'&body='+encodeURIComponent(t.replace(/\n/g,'\r\n'))+'">Email</a>':'')+'</div></div>';
+  });
+  return h+'</div>';
+}
 function mkOpen(id){
   var c=mkItems.filter(function(x){return x.id===id})[0]||{},ov=document.createElement('div');
   mkEditId=id||null;ov.id='mkOv';ov.className='mkov';
   ov.innerHTML='<div class="mkpanel" role="dialog" aria-label="Contact"><h2>'+(id?'Edit contact':'Add contact')+'</h2>'+
-   '<label class="f">Name<input id="mkf-name" value="'+esc(c.name||'')+'"></label><label class="f">Phone<input id="mkf-phone" inputmode="tel" value="'+esc(c.phone||'')+'"></label><label class="f">Email<input id="mkf-email" type="email" value="'+esc(c.email||'')+'"></label><label class="f">Group or source<input id="mkf-group" value="'+esc(c.group||'')+'"></label>'+
+   '<label class="f">Name<input id="mkf-name" value="'+esc(c.name||'')+'"></label><label class="f">Phone<input id="mkf-phone" inputmode="tel" value="'+esc(c.phone||'')+'"></label>'+(id&&mkWa(c)?'<div class="mkrow"><a class="mklink wa" href="'+esc(mkWa(c))+'" target="_blank" rel="noopener noreferrer">WhatsApp</a></div>':'')+'<label class="f">Email<input id="mkf-email" type="email" value="'+esc(c.email||'')+'"></label>'+(id&&c.email?'<div class="mkrow"><a class="mklink em" href="mailto:'+esc(c.email)+'">Email</a></div>':'')+'<label class="f">Group or source<input id="mkf-group" value="'+esc(c.group||'')+'"></label>'+
    '<label class="f">Consent<select id="mkf-consent"><option value="unknown"'+((c.consent||'unknown')==='unknown'?' selected':'')+'>Unknown</option><option value="yes"'+(c.consent==='yes'?' selected':'')+'>Opted in</option><option value="no"'+(c.consent==='no'?' selected':'')+'>Opted out</option></select></label><label class="f">Notes<textarea id="mkf-notes" rows="3">'+esc(c.notes||'')+'</textarea></label>'+
-   '<div class="mkact"><button type="button" class="btn" data-mksave="1">Save</button><button type="button" class="btn ghost" data-mkcancel="1">Cancel</button>'+(id?'<button type="button" class="btn ghost" id="mkDel" data-mkdel="1" style="margin-left:auto">Delete</button>':'')+'</div></div>';
+   (id?mkSendBox(c):'')+'<div class="mkact"><button type="button" class="btn" data-mksave="1">Save</button><button type="button" class="btn ghost" data-mkcancel="1">Cancel</button>'+(id?'<button type="button" class="btn ghost" id="mkDel" data-mkdel="1" style="margin-left:auto">Delete</button>':'')+'</div></div>';
   document.body.appendChild(ov);setTimeout(function(){var f=$('#mkf-name');if(f)f.focus()},30);
 }
 function mkClose(){var o=$('#mkOv');if(o)o.remove();mkEditId=null}
