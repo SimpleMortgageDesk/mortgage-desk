@@ -642,13 +642,14 @@
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
         '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="backup" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div><div style="margin:4px 0 10px"><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="backup" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div><div style="margin:4px 0 10px"><button class="btn ghost" data-a="pin">PIN &amp; Auto-lock</button><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Calendar reminders</h3>' + (calOn()
           ? '<p style="margin:0 0 8px;color:#1b5e20">On. Booked appointments are added to your Outlook calendar with a ' + CAL_MIN + '-minute reminder.</p><button class="btn ghost" data-a="caloff">Turn off</button>'
           : '<p style="margin:0 0 8px;color:#58697A">Adds each booked appointment to your Outlook calendar with a ' + CAL_MIN + '-minute reminder, so your phone alerts you even when this app is closed. You will be asked to approve calendar access once.</p><button class="btn" data-a="calon">Turn on</button>') +
         '<p style="margin:8px 0 0;color:#58697A;font-size:12px">Only the name, time, type, method and place go to the calendar, never your notes. On your phone, use the Outlook app or add this Microsoft account to your phone calendar, and allow notifications.</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
         '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Restore from backup</h3><p style="margin:0 0 8px;color:#58697A">Use this if something was changed or deleted by mistake. Cases in the backup file replace the matching cases here.</p><input type="file" id="mdRes" accept=".json,application/json" style="max-width:100%">' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Log out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn" data-a="out">Log out</button>' +
         '<p style="margin-top:14px;min-height:18px" id="mdAccMsg">' + esc(msg || '') + '</p></div>';
     }
@@ -656,16 +657,18 @@
     var say = function (m) { var e = $('mdAccMsg'); if (e) e.textContent = m; };
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
     ov.addEventListener('change', async function (e) {
-      if (e.target.id !== 'mdImp' || !e.target.files[0]) return;
+      var isRes = e.target.id === 'mdRes';
+      if ((e.target.id !== 'mdImp' && !isRes) || !e.target.files[0]) return;
+      if (isRes && !confirm('Restore from this backup? Cases in the file replace the matching cases here with the backup version. Cases not in the file are left alone.')) { e.target.value = ''; return; }
       try {
         var p = JSON.parse(await e.target.files[0].text()), n = 0, skipped = 0;
         COLS.forEach(function (col) {
           (p[col] || []).forEach(function (row) {
-            var id = safeId(row.id || genId()); if (mem[col][id]) { skipped++; return; }
+            var id = safeId(row.id || genId()); if (mem[col][id] && !isRes) { skipped++; return; }
             var d = clone(row); delete d.id; localWrite(col, id, d, 'set'); n++;
           });
         });
-        say('Imported ' + n + ' item(s)' + (skipped ? ', skipped ' + skipped + ' that already exist' : '') + '. Uploading to OneDrive…');
+        say((isRes ? 'Restored ' : 'Imported ') + n + ' item(s)' + (skipped ? ', skipped ' + skipped + ' that already exist' : '') + '. Uploading to OneDrive…');
         flush();
       } catch (x) { say('That file could not be read as a backup.'); }
     });
@@ -678,6 +681,7 @@
       else if (a === 'calon') { lset('md.calwant', '1'); startLogin(); }
       else if (a === 'caloff') { lset('md.cal', null); render('Calendar reminders turned off. Events already in Outlook stay there.'); }
       else if (a === 'pdfbk') { ov.remove(); openBackup(); }
+      else if (a === 'pin') { ov.remove(); openPin(); }
       else if (a === 'out') { ov.remove(); signOut(); }
     });
   }
@@ -700,7 +704,7 @@
   /* ---------- automatic log out after a period with no activity (default 2 hours) ---------- */
   var IDLE_MS = Math.max(0.05, +(CFG.idleMinutes || 120)) * 60000, idleBusy = false, lastW = 0;
   function idleLabel() { var m = IDLE_MS / 60000; return m >= 60 ? (m / 60 === 1 ? '1 hour' : (m / 60) + ' hours') : m + ' minutes'; }
-  function markAct() { try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
+  function markAct() { if (locked) return; try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
   function lastAct() { var v = 0; try { v = +localStorage.getItem('md.act') || 0; } catch (e) {} return v || Date.now(); }
   function isIdle() { return Date.now() - lastAct() >= IDLE_MS; }
   async function autoSignOut() {
@@ -711,6 +715,88 @@
       return;
     }
     await wipeAndReload(true);
+  }
+
+  /* ---------- PIN screen lock (auto-locks after 15 minutes with no activity, only when a PIN is set) ---------- */
+  var locked = false, LOCK_MS = Math.max(0.05, +(CFG.lockMinutes || 15)) * 60000, pinFails = 0;
+  function pinData() { try { return JSON.parse(ls('md.pin') || 'null'); } catch (e) { return null; } }
+  function b64(buf) { var a = new Uint8Array(buf), s2 = ''; for (var i = 0; i < a.length; i++) s2 += String.fromCharCode(a[i]); return btoa(s2); }
+  function unb64(t) { var s2 = atob(t), a = new Uint8Array(s2.length); for (var i = 0; i < s2.length; i++) a[i] = s2.charCodeAt(i); return a; }
+  async function pinHash(pin, salt) {
+    var k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    return b64(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 150000, hash: 'SHA-256' }, k, 256));
+  }
+  async function pinSet(pin) { var salt = crypto.getRandomValues(new Uint8Array(16)); lset('md.pin', JSON.stringify({ s: b64(salt), h: await pinHash(pin, salt) })); }
+  async function pinCheck(pin) { var d = pinData(); if (!d) return true; return (await pinHash(pin, unb64(d.s))) === d.h; }
+  function lockDue() { return !!pinData() && Date.now() - lastAct() >= LOCK_MS; }
+  function lockNow() {
+    if (locked || !pinData()) return;
+    locked = true; lset('md.locked', '1'); pinFails = 0;
+    var ov = document.createElement('div'); ov.id = 'mdLock';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:400;background:#0f1f1a;color:#fff;display:flex;align-items:center;justify-content:center;padding:16px;font:15px system-ui,sans-serif';
+    ov.innerHTML = '<form style="width:min(340px,100%);text-align:center" autocomplete="off"><div style="font-size:40px">🔒</div><h2 style="margin:8px 0 4px;font-size:22px">Mortgage Desk is locked</h2><p style="margin:0 0 16px;color:#b9c8c0;font-size:13px">Enter your PIN to carry on.</p>' +
+      '<input id="mdLockPin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN" style="width:100%;box-sizing:border-box;padding:12px;font-size:22px;letter-spacing:.3em;text-align:center;border-radius:8px;border:1px solid #3d5a4e;background:#fff;color:#101C26">' +
+      '<button type="submit" id="mdLockGo" style="width:100%;margin-top:12px;padding:12px;font-size:16px;border:0;border-radius:8px;background:#2f8f6b;color:#fff;cursor:pointer">Unlock</button>' +
+      '<p id="mdLockMsg" style="min-height:20px;margin:10px 0 0;color:#ffb4a8;font-size:13px"></p><button type="button" id="mdLockOut" style="background:none;border:0;color:#b9c8c0;text-decoration:underline;cursor:pointer;font-size:13px">Forgot PIN? Log out</button></form>';
+    document.body.appendChild(ov);
+    var app = $('app'); if (app) { try { app.inert = true; } catch (e) {} }
+    var inp = $('mdLockPin'), msg = $('mdLockMsg'); setTimeout(function () { inp.focus(); }, 30);
+    ov.querySelector('form').addEventListener('submit', async function (e) {
+      e.preventDefault(); var v = inp.value.trim(); if (!v) return;
+      var ok = false; try { ok = await pinCheck(v); } catch (x) { ok = false; }
+      if (ok) { unlock(); return; }
+      pinFails++; inp.value = '';
+      if (pinFails >= 5) { msg.textContent = 'Too many wrong attempts. Logging out…'; autoSignOut(); return; }
+      msg.textContent = 'Wrong PIN. ' + (5 - pinFails) + ' attempt' + (5 - pinFails === 1 ? '' : 's') + ' left.'; inp.focus();
+    });
+    $('mdLockOut').addEventListener('click', function () { signOut(); });
+  }
+  function unlock() {
+    locked = false; lset('md.locked', null); markAct();
+    var ov = $('mdLock'); if (ov) ov.remove();
+    var app = $('app'); if (app) { try { app.inert = false; } catch (e) {} }
+  }
+  function checkLock() { if (!locked && tok() && lockDue()) lockNow(); }
+  function startLockWatch() {
+    if (pinData() && (ls('md.locked') === '1' || lockDue())) lockNow();
+    setInterval(checkLock, Math.min(15000, LOCK_MS / 2));
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkLock(); });
+    window.addEventListener('focus', checkLock); window.addEventListener('pageshow', checkLock);
+  }
+  function openPin() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+    var inS = 'width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #c9d3da;border-radius:6px;font-size:15px;margin:4px 0 10px';
+    function draw(msg, good) {
+      var has = !!pinData(), mins = LOCK_MS / 60000;
+      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(460px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PIN &amp; Auto-lock</h2><button class="btn ghost" data-p="close">Close</button></div>' +
+        '<p style="margin:12px 0;color:#58697A">' + (has ? '<b style="color:#1b5e20">PIN is on.</b> The screen locks by itself after ' + mins + ' minutes with no activity, and you unlock it with your PIN.' : 'Set a PIN and the screen will lock by itself after ' + mins + ' minutes with no activity. Without a PIN, nothing locks.') + '</p>' +
+        (has ? '<label>Current PIN<input id="pnCur" type="password" inputmode="numeric" maxlength="12" autocomplete="off" style="' + inS + '"></label>' : '') +
+        '<label>' + (has ? 'New PIN' : 'Choose a PIN') + ' (4 to 8 digits)<input id="pnNew" type="password" inputmode="numeric" maxlength="8" autocomplete="off" style="' + inS + '"></label>' +
+        '<label>Repeat PIN<input id="pnNew2" type="password" inputmode="numeric" maxlength="8" autocomplete="off" style="' + inS + '"></label>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn" data-p="save">' + (has ? 'Change PIN' : 'Set PIN') + '</button>' + (has ? '<button class="btn ghost" data-p="lock">Lock now</button><button class="btn ghost" data-p="remove">Remove PIN</button>' : '') + '</div>' +
+        '<p id="pnMsg" style="min-height:18px;margin:12px 0 0;color:' + (good ? '#1b5e20' : '#b3261e') + '">' + esc(msg || '') + '</p>' +
+        '<p style="margin:8px 0 0;color:#58697A;font-size:12px">This is a screen lock for this device only. Your PIN is stored here as a scrambled code, never in OneDrive. If you forget it, log out and sign in again with Microsoft.</p></div>';
+    }
+    draw('');
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+    ov.addEventListener('click', async function (e) {
+      var b = e.target.closest && e.target.closest('[data-p]'); if (!b) return; var a = b.getAttribute('data-p');
+      if (a === 'close') { ov.remove(); return; }
+      if (a === 'lock') { ov.remove(); lockNow(); return; }
+      var cur = $('pnCur'), has = !!pinData();
+      if (has) { var okc = false; try { okc = await pinCheck(cur ? cur.value.trim() : ''); } catch (x) {} if (!okc) { draw('Current PIN is wrong.'); return; } }
+      if (a === 'remove') { lset('md.pin', null); lset('md.locked', null); draw('PIN removed. The screen will no longer lock.', true); return; }
+      if (a === 'save') {
+        var n1 = $('pnNew').value.trim(), n2 = $('pnNew2').value.trim();
+        if (!/^\d{4,8}$/.test(n1)) { draw('The PIN must be 4 to 8 digits.'); return; }
+        if (n1 !== n2) { draw('The two PINs do not match.'); return; }
+        try { await pinSet(n1); } catch (x) { draw('This browser cannot store a PIN here.'); return; }
+        markAct(); draw(has ? 'PIN changed.' : 'PIN set. The screen locks after ' + (LOCK_MS / 60000) + ' minutes of no activity.', true);
+      }
+    });
   }
   function checkIdle() {
     if (idleBusy || !tok() || !isIdle()) return;
@@ -795,7 +881,7 @@
     try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
     if (!tok()) { showSignIn(''); return; }
     if (isIdle()) { await autoSignOut(); return; }
-    startIdleWatch();
+    startIdleWatch(); startLockWatch();
     migrateToAppFolder();
     var o = $('mdSign'); if (o) o.remove();
     readyRes({ collection: collection });

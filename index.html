@@ -328,6 +328,19 @@ table.nt th{font-weight:600;background:var(--surface2)}
 #settingsBtn:hover{filter:brightness(1.15)}
 .homesplit{display:flex;flex-direction:column;gap:14px}
 .hp{border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.agd{margin:10px 0 6px;font-size:14px}
+.trow{display:flex;align-items:center;gap:10px;justify-content:space-between;cursor:pointer;flex-wrap:wrap}
+.trow .tx{min-width:0;flex:1 1 200px}
+.trbulk{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;font-size:13px}
+.trbulk:empty{display:none}
+.nl1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-size:12px}
+.ntc{max-width:260px}
+.colpick{position:relative;display:inline-block}
+.colpick summary{list-style:none;cursor:pointer}
+.colpick summary::-webkit-details-marker{display:none}
+.colbox{position:absolute;z-index:20;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:grid;gap:6px;min-width:170px;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.colbox label{display:flex;gap:8px;align-items:center;font-size:13px}
+#side .sglater{display:block;width:100%;text-align:left;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2f4a40;padding:0}
 @media (min-width:760px){.hp{height:calc((100vh - var(--hh,64px) - 56px)/2);min-height:300px;overflow:auto}}
 #homeCal .apcell{min-height:64px}
 #homeCal .apwrap{grid-template-columns:minmax(0,1fr) 340px}
@@ -412,7 +425,7 @@ nav{flex:0 0 auto}
     <div class="brand"><svg width="22" height="22" viewBox="0 0 80 80" aria-hidden="true"><path d="M40 4 L76 34 V76 H4 V34 Z" fill="#2f4a40"/><circle cx="40" cy="30" r="6" fill="#fff"/><rect x="18" y="44" width="44" height="6" rx="3" fill="#fff"/><rect x="18" y="56" width="30" height="6" rx="3" fill="#9fd8c0"/></svg><span>Mortgage <span style="font-weight:300">Desk</span></span></div>
     <nav id="nav" aria-label="Sections"></nav><button class="btn" id="newBtn">New case</button>
     <div class="sp"></div>
-    <input id="q" class="search" type="search" placeholder="Search clients, address, reference" aria-label="Search cases"><nav id="nav2" aria-label="Tools"></nav>
+    <input id="q" class="search" type="search" placeholder="Search clients" aria-label="Search cases"><nav id="nav2" aria-label="Tools"></nav>
     <button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files">
   </div></header>
   <aside id="side" aria-label="Reminders"><div id="sideAcct"></div><div id="sideTasks"></div></aside>
@@ -422,9 +435,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 12:42";</script>
-<script src="config.js?v=202611081242"></script>
-<script src="sync.js?v=202611081242"></script>
+<script>window.MD_BUILD="2026-11-08 13:13";</script>
+<script src="config.js?v=202611081313"></script>
+<script src="sync.js?v=202611081313"></script>
 <script>
 (function(){
 'use strict';
@@ -434,7 +447,7 @@ var STAGES=[
 var STAGE_LABEL={lost:'Closed lost'}; STAGES.forEach(function(s){STAGE_LABEL[s.id]=s.label});
 var TYPES=['Purchase','First-time buyer','Remortgage','Product transfer','Further advance','Buy to let','Other'];
 
-var db=null, col=null, cases=[], loaded=false, view='tasks', query='', stageFilter='', sortBy=(function(){try{return localStorage.getItem('sortBy')||'task'}catch(e){return 'task'}})(), openId=undefined;
+var db=null, col=null, cases=[], loaded=false, view='tasks', query='', stageFilter='', lenderFilter='', revFilter='', sortBy=(function(){try{return localStorage.getItem('sortBy')||'task'}catch(e){return 'task'}})(), openId=undefined;
 var queues={};
 
 /* ---------- helpers ---------- */
@@ -461,7 +474,7 @@ function protFs(c){
   (protAll?ps:ps.slice(0,1)).map(function(n){return noteItem(n,'protection',(protAll||ps.length<2?'':' (latest)'),esc)}).join('')+
   (ps.length>1?'<button type="button" class="btn ghost sm" id="prAll">'+(protAll?'Show latest only':'Show all '+ps.length+' protection notes')+'</button>':''))+'</fieldset>';
 }
-function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function(a,b){return b.ts-a.ts})[0];if(!n)return '<span class="muted">—</span>';var t=String(n.text||'');if(!t&&n.table)t='[Table]';if(t.length>110)t=t.slice(0,110)+'…';return '<div class="muted" style="font-family:var(--mono);font-size:11px">'+stampOf(n.ts)+'</div>'+esc(t)}
+function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function(a,b){return b.ts-a.ts})[0];if(!n)return '<span class="muted">—</span>';var t=String(n.text||'');if(!t&&n.table)t='[Table]';if(t.length>140)t=t.slice(0,140)+'…';t=t.replace(/\s+/g,' ');return '<div class="nl1" title="'+esc(stampOf(n.ts)+' '+t)+'"><span class="muted" style="font-family:var(--mono);font-size:11px">'+stampOf(n.ts)+'</span> '+esc(t)+'</div>'}
 function cno(c){return c.clientNo?' <span class="cno">'+esc(c.clientNo)+'</span>':''}
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
@@ -621,6 +634,8 @@ function visible(){
   var q=query.trim().toLowerCase();
   return cases.filter(function(c){
     if(stageFilter&&c.stage!==stageFilter)return false;
+    if(lenderFilter&&(c.lender||'')!==lenderFilter)return false;
+    if(revFilter){var rv=reviewOf(c);if(revFilter==='none'?!!rv:rv.slice(0,7)!==revFilter)return false}
     if(!q)return true;
     var hay=[names(c),c.propertyAddress,c.clientNo,c.lenderRef,c.lender,c.product,c.conveyancer].join(' ').toLowerCase();
     return hay.indexOf(q)>-1;
@@ -669,7 +684,7 @@ function render(){
   var v=$('#view');
   if(!db){v.innerHTML='<div class="banner">Saving is not available in this view, so cases cannot be stored. Open the page from your artifact link while signed in.</div>';return}
   if(!loaded){v.innerHTML='<div class="empty">Loading your cases…</div>';return}
-  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHTML(true);renderTray()}
+  if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHome();renderTray()}
   else if(view==='notebook'){if(!$('#nbMain')||!v.contains($('#nbMain'))){v.innerHTML=nbShell();nbShown=null}renderNotebook()}
   else if(view==='calculator'){if(!$('#calcMain')||!v.contains($('#calcMain'))){v.innerHTML=calcShell();calcUpdate()}}
   else if(view==='birthdays'){if(!$('#bdList')||!v.contains($('#bdList'))){v.innerHTML=bdShell();bdTplRender()}bdRender()}
@@ -711,21 +726,26 @@ function pipelineHTML(){
 }
 
 /* ---------- cases table ---------- */
+var CASE_COLS=[['type','Type'],['stage','Stage'],['lender','Lender'],['task','Next task due'],['review','Review date'],['note','Latest note'],['prot','Protection']];
+var colsHide=(function(){try{return JSON.parse(localStorage.getItem('colsHide')||'[]')}catch(e){return []}})();
+function colOn(k){return colsHide.indexOf(k)<0}
+function lenderSelHTML(){var ls={};cases.forEach(function(c){if(c.lender)ls[c.lender]=1});return '<select id="lenderSel" aria-label="Filter by lender"><option value="">All lenders</option>'+Object.keys(ls).sort().map(function(l){return '<option value="'+esc(l)+'"'+(lenderFilter===l?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select>'}
+function revSelHTML(){var ms={};cases.forEach(function(c){var r=reviewOf(c);if(r)ms[r.slice(0,7)]=1});return '<select id="revSel" aria-label="Filter by review month"><option value="">Any review month</option>'+Object.keys(ms).sort().map(function(m){return '<option value="'+m+'"'+(revFilter===m?' selected':'')+'>'+new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</option>'}).join('')+'<option value="none"'+(revFilter==='none'?' selected':'')+'>No review date</option></select>'}
 function casesHTML(){
   var list=sortList(visible());
   var opts='<option value="">All stages</option>'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<option value="'+s.id+'"'+(stageFilter===s.id?' selected':'')+'>'+s.label+'</option>'}).join('');
   var h='<div class="pagehead"><h1>All cases</h1><button class="btn ghost" data-act="export">Export CSV</button></div>'+
-    '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>';
+    '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+lenderSelHTML()+revSelHTML()+'<details class="colpick"><summary class="btn ghost">Columns</summary><div class="colbox">'+CASE_COLS.map(function(c){return '<label><input type="checkbox" data-colk="'+c[0]+'"'+(colOn(c[0])?' checked':'')+'> '+c[1]+'</label>'}).join('')+'</div></details>'+((stageFilter||lenderFilter||revFilter)?' <button type="button" class="btn ghost" data-clrf="1">Clear filters</button>':'')+'</div>';
   if(!cases.length)return h+emptyHTML();
-  h+='<div class="tw"><table><thead><tr><th>Client</th><th>Type</th><th>Stage</th><th>Lender</th><th>Next task due</th><th>Review date</th><th>Latest note</th><th>Protection</th></tr></thead><tbody>';
+  h+='<div class="tw"><table><thead><tr><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="muted">No cases match.</td></tr>';
   list.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
     h+='<tr class="click" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+'</div></td>'+
-      '<td>'+esc(c.type||'')+'</td><td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>'+
-      '<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>'+
-      taskCell(c)+'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>'+
-      '<td style="max-width:260px;font-size:12px">'+latestNoteCell(c)+'</td><td style="max-width:260px;font-size:12px">'+latestNoteCell(c,'protection')+'</td></tr>';
+      (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
+      (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
+      (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
+      (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
   });
   return h+'</tbody></table></div>';
 }
@@ -908,6 +928,19 @@ function apHTML(home){
   var up=apSorted(appts.filter(function(a){return (a.status||'booked')==='booked'&&(a.date>tIso||(a.date===tIso&&apMin(a.time)+(+a.dur||30)>=nowMin))})).slice(0,8);
   h+='<div class="aphead" style="margin-top:16px"><h2 style="font-size:15px">Coming up</h2></div>'+(up.length?up.map(function(a){return apCard(a,true)}).join(''):'<div class="muted">No upcoming appointments.</div>');
   return h+'</div></div>';
+}
+var homeMonth=false;
+function apHome(){
+  if(homeMonth)return '<div class="aphead" style="margin-bottom:6px"><h2 style="font-size:15px">Month view</h2><button type="button" class="btn ghost sm" data-hmtog="0">Back to agenda</button></div>'+apHTML(true);
+  var nowMin=new Date().getHours()*60+new Date().getMinutes(),tI=iso(TODAY),h='<div class="aphead"><h2>Today and next 7 days</h2><button type="button" class="btn ghost sm" data-hmtog="1">Month view</button><button type="button" class="btn" data-apnew="1" style="margin-left:auto">Book appointment</button></div>',any=0;
+  for(var i=0;i<8;i++){
+    var di=addDays(tI,i),l=apSorted(appts.filter(function(a){return a.date===di&&(a.status||'booked')!=='cancelled'}));
+    if(!l.length&&i>0)continue;
+    any+=l.length;
+    h+='<div class="agd"><b>'+(i===0?'Today':i===1?'Tomorrow':'')+(i<2?' · ':'')+new Date(di+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</b><span class="muted"> · '+l.length+' appointment'+(l.length===1?'':'s')+'</span></div>'+(l.length?l.map(function(a){return apCard(a,false)}).join(''):'<div class="muted" style="margin:0 0 8px">Nothing booked today.</div>');
+  }
+  if(!any)h+='<div class="muted" style="margin-top:6px">No appointments in the next 7 days.</div>';
+  return h;
 }
 function apNextHtml(cid){
   var nowMin=new Date().getHours()*60+new Date().getMinutes(),t=iso(TODAY);
@@ -1245,7 +1278,7 @@ function exportCsv(){
 }
 
 /* ---------- task tray ---------- */
-var trayOpen=false,trFilter='open',trQuery='';
+var trayOpen=false,trFilter='open',trQuery='',trOpen={};
 function allTasks(){var out=[];cases.forEach(function(c){if(c.stage==='lost')return;(c.tasks||[]).forEach(function(t){out.push({c:c,t:t})})});return out}
 function trBucket(x){var d=x.t.due;if(x.t.done)return 'done';if(!d)return 'none';var n=diff(d);return n<0?'over':n===0?'today':n<=7?'week':'later'}
 function updTrayBtn(){var b=$('#trayBtn');if(!b)return;var od=allTasks().filter(function(x){return trBucket(x)==='over'}).length;b.innerHTML='Tasks'+(od?'<span class="tbadge">'+od+' overdue</span>':'')}
@@ -1253,7 +1286,8 @@ var TR_LABEL={pri:'High priority',over:'Overdue',today:'Due today',week:'Next 7 
 function trItem(x){
   var c=x.c,t=x.t,b=trBucket(x),k=c.id+'|'+t.id;
   if(editTk===k)return '<div class="tt"><div class="tm">'+tkEditor(k,t)+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div></div></div>';
-  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="tx">'+(t.pri&&!t.done?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</div>'+(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div><div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+k+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div></div></div>';
+  var open=!!trOpen[k],dchip=t.due?'<span class="chip '+(b==='over'?'bad':b==='today'?'warn':'')+'">'+(b==='today'?'Today':fd(t.due))+(t.time?' '+esc(t.time):'')+'</span>':'<span class="muted" style="font-size:12px">No date</span>';
+  return '<div class="tt '+(b==='over'?'bad':b==='today'?'warn':'')+(t.done?' done':'')+(t.pri&&!t.done?' pri':'')+(open?' open':'')+'"><input type="checkbox" data-trk="'+k+'"'+(t.done?' checked':'')+' aria-label="Mark done"><div class="tm"><div class="trow" data-trtog="'+k+'" role="button" tabindex="0" aria-expanded="'+open+'"><div class="tx">'+(t.pri&&!t.done?'<span class="prtag">HIGH</span> ':'')+esc(t.text)+'</div>'+dchip+'</div><div><button type="button" class="lnk" data-open="'+c.id+'">'+esc(names(c))+cno(c)+'</button></div>'+(open?(t.created?'<div class="muted" style="font-size:12px">Added '+shortStamp(t.created)+'</div>':'')+'<div class="tact"><input type="date" data-trd="'+k+'" value="'+esc(t.due||'')+'" aria-label="Due date"><input type="time" data-trt="'+k+'" value="'+esc(t.time||'')+'" aria-label="Time"><button type="button" class="star'+(t.pri?' on':'')+'" data-tkpri="'+k+'" title="High priority" aria-label="Toggle high priority">'+(t.pri?'★':'☆')+'</button><button type="button" class="btn ghost sm" data-tkedit="'+k+'">Edit</button><button type="button" class="btn ghost sm" data-snz="'+k+'|1">+1 day</button><button type="button" class="btn ghost sm" data-snz="'+k+'|7">+1 week</button></div>':'')+'</div></div>';
 }
 var sideOn=true;
 var mqSide=window.matchMedia('(min-width:760px)');
@@ -1264,12 +1298,14 @@ window.addEventListener('resize',function(){var h=document.querySelector('header
 function sideItem(e,g){
   return '<div class="si'+(g==='over'?' over':'')+'"><div style="min-width:0"><button type="button" class="lnk st" data-open="'+e.id+'">'+esc(e.who)+'</button><div class="sc">'+esc(e.label)+'</div><div class="sd">'+fd(e.date)+' · '+esc(rel(e.date))+'</div></div></div>';
 }
+var sideLater=false;
 function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var ev=reviewEvents();
   var h='<div class="sh"><b>Reminders</b><span class="muted" style="font-size:12px">'+ev.length+' review'+(ev.length===1?'':'s')+'</span></div>';
-  [['over','Overdue',function(n){return n<0}],['week','Next 7 days',function(n){return n>=0&&n<=7}],['month','Next 30 days',function(n){return n>7&&n<=30}],['later','Later',function(n){return n>30}]].forEach(function(g){
+  [['over','Overdue',function(n){return n<0}],['week','Next 7 days',function(n){return n>=0&&n<=7}],['month','Next 30 days',function(n){return n>7&&n<=30}],['q','31 to 90 days',function(n){return n>30&&n<=90}],['later','Later',function(n){return n>90}]].forEach(function(g){
     var gi=ev.filter(function(e){return g[2](diff(e.date))});
+    if(g[0]==='later'){if(gi.length)h+='<button type="button" class="sg sglater" data-sidelater="1" aria-expanded="'+sideLater+'">Later · '+gi.length+' <span>'+(sideLater?'▾':'▸')+'</span></button>'+(sideLater?gi.map(function(e){return sideItem(e,g[0])}).join(''):'');return}
     if(gi.length)h+='<div class="sg'+(g[0]==='over'?' bad':'')+'">'+g[1]+' · '+gi.length+'</div>'+gi.map(function(e){return sideItem(e,g[0])}).join('');
   });
   if(!ev.length)h+='<div class="muted" style="font-size:13px">No mortgage reviews due.</div>';
@@ -1283,6 +1319,7 @@ function renderTray(){
   var cnt={open:0,over:0,today:0,week:0,none:0,done:0};
   all.forEach(function(x){var b=trBucket(x);if(b==='done')cnt.done++;else{cnt.open++;if(b==='over')cnt.over++;if(b==='today'){cnt.today++;cnt.week++}if(b==='week')cnt.week++;if(b==='none')cnt.none++}});
   var chips=[['open','All open'],['over','Overdue'],['today','Today'],['week','Next 7 days'],['none','No date'],['done','Done']];
+  var tbk=$('#trBulk');if(tbk)tbk.innerHTML=cnt.over?'<span><b>'+cnt.over+' overdue.</b> Move them all to:</span> <button type="button" class="btn ghost sm" data-trbulk="today">Today</button><button type="button" class="btn ghost sm" data-trbulk="tomorrow">Tomorrow</button><button type="button" class="btn ghost sm" data-trbulk="monday">Next Monday</button>':'';
   $('#trChips').innerHTML=chips.map(function(c){return '<button type="button" data-trf="'+c[0]+'" aria-pressed="'+(trFilter===c[0])+'">'+c[1]+' '+cnt[c[0]]+'</button>'}).join('');
   var dl=$('#trCases');if(dl)dl.innerHTML=cases.slice().sort(function(a,b){return cnum(a)-cnum(b)}).map(function(c){return '<option value="'+esc((c.clientNo||'')+' · '+names(c))+'"></option>'}).join('');
   var items=all.filter(function(x){
@@ -1306,8 +1343,17 @@ function renderTray(){
   });
   box.innerHTML=h;
 }
+function trBulk(w){
+  var d=w==='today'?iso(TODAY):w==='tomorrow'?addDays(iso(TODAY),1):addDays(iso(TODAY),((8-TODAY.getDay())%7)||7),n=0;
+  cases.forEach(function(c){
+    if(c.stage==='lost'||!(c.tasks||[]).some(function(t){return !t.done&&t.due&&diff(t.due)<0}))return;
+    var nt=(c.tasks||[]).map(function(t){if(!t.done&&t.due&&diff(t.due)<0){n++;return Object.assign({},t,{due:d})}return t});
+    patch(c.id,{tasks:nt});
+  });
+  toast(n+' task'+(n===1?'':'s')+' moved to '+fd(d));
+}
 function taskShell(){
-  return '<input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
+  return '<input type="search" id="trQ" class="search" style="width:100%;margin-top:10px" placeholder="Search tasks or clients" aria-label="Search tasks" value="'+esc(trQuery)+'"><div id="trBulk" class="trbulk"></div><div id="trChips" class="chips" style="margin:10px 0"></div><div id="trList"></div>';
 }
 function openTray(){
   trayOpen=true;var t=$('#tray');t.hidden=false;
@@ -1467,6 +1513,10 @@ document.addEventListener('click',function(e){
   if(t.closest('#backupBtn')){backupAll();return}
   if(t.closest('#trayBtn')){if(trayOpen)closeTray();else openTray();return}
   if(t.closest('[data-trclose]')){closeTray();return}
+  if(t.closest('[data-clrf]')){stageFilter='';lenderFilter='';revFilter='';render();return}
+  var sl=t.closest('[data-sidelater]');if(sl){sideLater=!sideLater;renderSide();return}
+  var tg=t.closest('[data-trtog]');if(tg){var kk=tg.getAttribute('data-trtog');trOpen[kk]=!trOpen[kk];renderTray();return}
+  var tb=t.closest('[data-trbulk]');if(tb){trBulk(tb.getAttribute('data-trbulk'));return}
   var tf=t.closest('[data-trf]');if(tf){trFilter=tf.dataset.trf;renderTray();return}
   var sz=t.closest('[data-snz]');if(sz){var f1=trFind(sz.dataset.snz);if(f1){var base=f1.t.due&&diff(f1.t.due)>=0?f1.t.due:iso(TODAY);trSet(f1,{due:addDays(base,f1.n)})}return}
   if(t.id==='trAdd'){trAddTask();return}
@@ -1516,6 +1566,7 @@ document.addEventListener('click',function(e){
     write('nb-bday-template',function(){return same?nbCol.doc('bday-template').delete():nbCol.doc('bday-template').set({messages:ms,signature:sg,islamic:islSame?[]:im,updatedAt:Date.now()})});
     bdTplOpen=false;bdTplRender();bdRender();toast('Saved');return}
   if(t.id==='bdTplReset'){bdCfg={messages:null,signature:null,islamic:null};bdShuf={};bdDraft={};write('nb-bday-template',function(){return nbCol.doc('bday-template').delete()});bdTplRender();bdRender();toast('Template reset');return}
+  var hmt=t.closest&&t.closest('[data-hmtog]');if(hmt){homeMonth=hmt.getAttribute('data-hmtog')==='1';var hc3=$('#homeCal');if(hc3)hc3.innerHTML=apHome();return}
   var apd=t.closest&&t.closest('[data-apday]');
   if(apd){apSel=apd.getAttribute('data-apday');var pq=apSel.split('-');apMonth={y:+pq[0],m:+pq[1]-1};render();return}
   var apm=t.closest&&t.closest('[data-apmonth]');
@@ -1614,6 +1665,9 @@ document.addEventListener('change',function(e){
     var c=currentCase();patch(openId,{tasks:(c.tasks||[]).map(function(x){return x.id===t.dataset.tk?Object.assign({},x,{done:t.checked}):x})});return;
   }
   if(t.id==='stageSel'){stageFilter=t.value;render()}
+  if(t.id==='lenderSel'){lenderFilter=t.value;render()}
+  if(t.id==='revSel'){revFilter=t.value;render()}
+  if(t.getAttribute&&t.getAttribute('data-colk')){var ck=t.getAttribute('data-colk');colsHide=colsHide.filter(function(x){return x!==ck});if(!t.checked)colsHide.push(ck);try{localStorage.setItem('colsHide',JSON.stringify(colsHide))}catch(e){}render();var dp=document.querySelector('.colpick');if(dp)dp.open=true}
   if(t.id==='sortSel'){sortBy=t.value;try{localStorage.setItem('sortBy',sortBy)}catch(e){}render()}
   if(t.id==='fromClient'&&t.value){var s2=cases.filter(function(x){return x.id===t.value})[0];if(s2)startFrom(s2)}
   if(t.id==='pdfIn'){var fl=Array.from(t.files||[]);t.value='';if(fl.length)importPdfs(fl)}
@@ -1840,7 +1894,7 @@ claude.use('db').then(function(d){
   col=db.collection('cases');
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
-  apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();if(view==='tasks'&&!$('#apOv')){var hc2=$('#homeCal');if(hc2)hc2.innerHTML=apHTML(true)}var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
+  apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();if(view==='tasks'&&!$('#apOv')){var hc2=$('#homeCal');if(hc2)hc2.innerHTML=apHome()}var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
   nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};bdCfg.islamic=(tp&&tp.islamic&&tp.islamic.length)?tp.islamic:null;var gdoc=all.filter(function(x){return x.id==='bday-gender'})[0];bdGen=(gdoc&&gdoc.map)||{};notes=all.filter(function(x){return x.id!=='bday-template'&&x.id!=='bday-gender'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){
     cases=snap.docs.map(function(x){return Object.assign({id:x.id},x.data())});
