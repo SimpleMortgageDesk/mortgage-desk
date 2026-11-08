@@ -690,7 +690,7 @@ function mkExport(){
   toast('Exported '+l.length+' contact'+(l.length===1?'':'s'));
 }
 function mkSendBox(c){
-  var w=mkWa(c),h='<div class="mksend"><b>Send a message</b><div class="muted" style="font-size:12px;margin:2px 0 8px">'+(w||c.email?'Pick a message. It opens in WhatsApp or your email app, filled in with '+(mkFirst(c)?esc(mkFirst(c))+'\u2019s name':'a greeting')+'. Check consent first.':'Add a phone number or email to send a message.')+'</div>';
+  var w=mkWa(c),h='<div class="mksend"><b>Send a message</b><div class="muted" style="font-size:12px;margin:2px 0 8px">'+(w||c.email?'Pick a message. It opens in WhatsApp or your email app, filled in and ready to send. Check consent first.':'Add a phone number or email to send a message.')+'</div>';
   mkTpls().forEach(function(m){
     var t=mkFill(m.text,c),pv=t.replace(/\s+/g,' ').slice(0,150)+(t.length>150?'\u2026':'');
     h+='<div class="mksm"><div class="mkch"><b>'+esc(m.title)+'</b></div><div class="muted" style="font-size:12px;margin-bottom:6px">'+esc(pv)+'</div><div>'+
@@ -718,14 +718,14 @@ function mkSaveForm(){
 }
 
 /* ---------- marketing messages ---------- */
-var MK_SIG='Atik Raza\nMortgage and Protection Adviser\nAccess Financial Services',
+var MK_SIG='Atik Raza\nMortgage and Protection Adviser\nMobile: 07722223199',
     MK_FOOT='Your home may be repossessed if you do not keep up repayments on your mortgage.\nIf you would rather I did not message you, just reply STOP.';
 var MK_DEFAULTS=[
- {id:'d1',title:'Home purchase',subject:'Helping with your home purchase',text:"Assalamu Alaikum {name},\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser at Access Financial Services. If you are thinking about buying a home, whether it is your first or your next, I would be glad to help with your options, what you may be able to borrow, and each step from start to finish.\n\nThere is no obligation. Just message me back or call me for a friendly, no-pressure chat.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
- {id:'d2',title:'Remortgage',subject:'Is your mortgage deal ending soon?',text:"Assalamu Alaikum {name},\n\nI hope you are well, insha'Allah.\n\nIf your fixed rate or mortgage deal is due to end in the next 6 to 12 months, now is a good time to look at your options. If you do nothing, you may move onto your lender's standard variable rate, which is often higher.\n\nI am Atik, a mortgage adviser at Access Financial Services, and I would be happy to review your mortgage with you. There is no obligation.\n\nJust reply here and I will get back to you.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
- {id:'d3',title:'First-time buyer',subject:'Buying your first home',text:"Assalamu Alaikum {name},\n\nI hope this message finds you and your family in good health, insha'Allah.\n\nBuying a first home can feel overwhelming, and there is a lot to understand about deposits, affordability and the process. I am Atik, a mortgage adviser at Access Financial Services, and I help first-time buyers take it one step at a time.\n\nIf you or someone close to you is thinking about it, I would be glad to have a relaxed chat with no obligation.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
- {id:'d4',title:'Ask for a referral',subject:'Could you help someone you know?',text:"Assalamu Alaikum {name},\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser at Access Financial Services. Do you know a family member, friend or colleague who is looking to buy a home or remortgage? If so, I would be grateful if you could pass on my details, and I would be happy to help them.\n\nThank you for your time and support.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
- {id:'d5',title:'Gentle follow-up',subject:'Just following up',text:"Assalamu Alaikum {name},\n\nJust a quick note after my last message, in case it got lost. If a home purchase or remortgage is on your mind, I am happy to chat whenever suits you. No pressure at all.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT}
+ {id:'d1',title:'Home purchase',subject:'Helping with your home purchase',text:"Assalamu Alaikum,\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser. If you are thinking about buying a home, whether it is your first or your next, I would be glad to help with your options, what you may be able to borrow, and each step from start to finish.\n\nThere is no obligation. Just message me back or call me for a friendly, no-pressure chat.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d2',title:'Remortgage',subject:'Is your mortgage deal ending soon?',text:"Assalamu Alaikum,\n\nI hope you are well, insha'Allah.\n\nIf your fixed rate or mortgage deal is due to end in the next 6 to 12 months, now is a good time to look at your options. If you do nothing, you may move onto your lender's standard variable rate, which is often higher.\n\nI am Atik, a mortgage adviser, and I would be happy to review your mortgage with you. There is no obligation.\n\nJust reply here and I will get back to you.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d3',title:'First-time buyer',subject:'Buying your first home',text:"Assalamu Alaikum,\n\nI hope this message finds you and your family in good health, insha'Allah.\n\nBuying a first home can feel overwhelming, and there is a lot to understand about deposits, affordability and the process. I am Atik, a mortgage adviser, and I help first-time buyers take it one step at a time.\n\nIf you or someone close to you is thinking about it, I would be glad to have a relaxed chat with no obligation.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d4',title:'Ask for a referral',subject:'Could you help someone you know?',text:"Assalamu Alaikum,\n\nI hope you and your family are well, insha'Allah.\n\nI am Atik, a mortgage adviser. Do you know a family member, friend or colleague who is looking to buy a home or remortgage? If so, I would be grateful if you could pass on my details, and I would be happy to help them.\n\nThank you for your time and support.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT},
+ {id:'d5',title:'Gentle follow-up',subject:'Just following up',text:"Assalamu Alaikum,\n\nJust a quick note after my last message, in case it got lost. If a home purchase or remortgage is on your mind, I am happy to chat whenever suits you. No pressure at all.\n\nJazakAllah khair.\n\n"+MK_SIG+"\n\n"+MK_FOOT}
 ];
 var mkMsgsDoc=null,mkTplId='',mkMsgEdit=null,mkDraft=null;
 function mkTpls(){return mkMsgsDoc||MK_DEFAULTS}
@@ -736,7 +736,7 @@ function mkTplCur(){return mkTpls().filter(function(x){return x.id===mkTplId})[0
 function mkMsgs(){
   var box=$('#mkMsgs');if(!box)return;
   var l=mkDraft?[mkDraft].concat(mkTpls()):mkTpls();
-  box.innerHTML='<div class="mknote">Use <b>{name}</b> where you want the contact\u2019s first name. If a contact has no name, it is left out. On the Contacts tab, choose a message and the WhatsApp and Email buttons will open with it filled in. Each message includes the usual mortgage warning and a way to opt out.</div>'+
+  box.innerHTML='<div class="mknote">Messages start with a general greeting and do not use a name. (If you ever want one, type {name} where the first name should go.) On the Contacts tab, choose a message and the WhatsApp and Email buttons will open with it filled in. Each message includes the usual mortgage warning and a way to opt out.</div>'+
   '<div class="mkbar"><button type="button" class="btn" data-mkmnew="1">New message</button>'+(mkMsgsDoc?'<button type="button" class="btn ghost" data-mkmreset="1">Restore the standard messages</button>':'')+'</div>'+
   (l.length?l.map(function(m){
     if(mkMsgEdit===m.id)return '<div class="mkcard"><label class="f">Title<input id="mkm-title" value="'+esc(m.title)+'"></label><label class="f">Email subject<input id="mkm-subject" value="'+esc(m.subject||'')+'"></label><label class="f">Message<textarea id="mkm-text" rows="12">'+esc(m.text)+'</textarea></label><div class="mkact"><button type="button" class="btn" data-mkmsave="'+esc(m.id)+'">Save</button><button type="button" class="btn ghost" data-mkmcancel="1">Cancel</button><button type="button" class="btn ghost" data-mkmdel="'+esc(m.id)+'" style="margin-left:auto">Delete</button></div></div>';
@@ -745,7 +745,7 @@ function mkMsgs(){
 }
 function mkMsgAct(t){
   var g=function(a){var e=t.closest('['+a+']');return e?e.getAttribute(a):null},v;
-  if(g('data-mkmnew')!==null){var id='c'+Date.now().toString(36);mkDraft={id:id,title:'New message',subject:'',text:"Assalamu Alaikum {name},\n\n\n\n"+MK_SIG+"\n\n"+MK_FOOT};mkMsgEdit=id;mkMsgs();return true}
+  if(g('data-mkmnew')!==null){var id='c'+Date.now().toString(36);mkDraft={id:id,title:'New message',subject:'',text:"Assalamu Alaikum,\n\n\n\n"+MK_SIG+"\n\n"+MK_FOOT};mkMsgEdit=id;mkMsgs();return true}
   if(g('data-mkmreset')!==null){if(!window.confirm('Replace your messages with the standard ones?'))return true;mkMsgsDoc=null;write('mkm',function(){return mkCol.doc('messages').delete()});mkMsgEdit=null;mkMsgs();return true}
   if((v=g('data-mkmedit'))){mkMsgEdit=v;mkMsgs();return true}
   if(g('data-mkmcancel')!==null){mkMsgEdit=null;mkDraft=null;mkMsgs();return true}

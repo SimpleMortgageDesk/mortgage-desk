@@ -744,6 +744,13 @@
     document.body.appendChild(ov);
     var app = $('app'); if (app) { try { app.inert = true; } catch (e) {} }
     var inp = $('mdLockPin'), msg = $('mdLockMsg'); setTimeout(function () { inp.focus(); }, 30);
+    var autoSeq = 0;
+    inp.addEventListener('input', async function () {
+      var v = inp.value.trim(), my = ++autoSeq;
+      if (v.length < 4 || v.length > 8) return;
+      var ok = false; try { ok = await pinCheck(v); } catch (x) { ok = false; }
+      if (ok && my === autoSeq && !$('mdLock') === false) unlock();
+    });
     ov.querySelector('form').addEventListener('submit', async function (e) {
       e.preventDefault(); var v = inp.value.trim(); if (!v) return;
       var ok = false; try { ok = await pinCheck(v); } catch (x) { ok = false; }
