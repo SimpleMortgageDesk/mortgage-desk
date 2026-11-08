@@ -203,9 +203,9 @@ function visible(){
 
 /* ---------- render shell ---------- */
 function renderNav(){updTrayBtn();
-  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays']];
+  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
   var dc=dueCount(),tdc=allTasks().filter(function(x){return trBucket(x)==='over'}).length;
-  var tools={calculator:1,notebook:1,birthdays:1};
+  var tools={calculator:1,notebook:1,birthdays:1,marketing:1};
   var mk=function(list){return list.map(function(i){
     return '<button data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='reminders'&&dc?'<span class="badge">'+dc+' overdue</span>':'')+(i[0]==='tasks'&&tdc?'<span class="badge">'+tdc+' overdue</span>':'')+(i[0]==='birthdays'&&bdCounts(bdPeople().list).today?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bdCounts(bdPeople().list).today+' today</span>':'')+(i[0]==='appointments'&&apTodayN()?'<span class="badge" style="background:var(--accent-soft,#dbe9f8);color:var(--accent)">'+apTodayN()+' today</span>':'')+'</button>';
   }).join('')};
@@ -246,6 +246,7 @@ function render(){
   if(view==='tasks'){if(!$('#trList')||!v.contains($('#trList'))){v.innerHTML='<div class="homesplit"><section class="hp" id="homeCal" aria-label="Appointments calendar"></section><section class="hp htk" aria-label="Tasks"><div class="pagehead"><h1>Tasks</h1><span class="muted">Due today first, then overdue, then soonest</span></div><div class="tpage">'+taskShell()+'</div></section><aside class="hp hrem" id="homeRem" aria-label="Reminders"></aside></div>'}var hc=$('#homeCal');if(hc&&!$('#apOv'))hc.innerHTML=apHome();renderTray();renderRem()}
   else if(view==='notebook'){if(!$('#nbMain')||!v.contains($('#nbMain'))){v.innerHTML=nbShell();nbShown=null}renderNotebook()}
   else if(view==='calculator'){if(!$('#calcMain')||!v.contains($('#calcMain'))){v.innerHTML=calcShell();calcUpdate()}}
+  else if(view==='marketing'){if(!$('#mkList')||!v.contains($('#mkList')))v.innerHTML=mkShell();mkList()}
   else if(view==='birthdays'){if(!$('#bdList')||!v.contains($('#bdList'))){v.innerHTML=bdShell();bdTplRender()}bdRender()}
   else if(view==='appointments')v.innerHTML=apHTML();
   else if(view==='pipeline')v.innerHTML=pipelineHTML();
@@ -537,6 +538,156 @@ function apSave(){
   apSel=date;var pd=date.split('-');apMonth={y:+pd[0],m:+pd[1]-1};
   var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
 }
+/* ---------- marketing contacts ---------- */
+var mkCol=null,mkItems=[],mkQuery='',mkConsent='',mkGroup='',mkGroupKey='',mkEditId=null,mkTab='contacts';
+var MK_LABEL={yes:'Opted in',unknown:'Unknown',no:'Opted out'};
+function mkSave(){var items=mkItems.slice();return write('mk',function(){return mkCol.doc('contacts').set({items:items,updatedAt:Date.now()})})}
+function mkShell(){
+  return '<div class="pagehead"><h1>Marketing</h1><span class="muted">Contacts for your marketing</span></div>'+
+  '<div class="mktabs"><button type="button" class="mktab on" data-mktab="contacts">Contacts</button></div>'+
+  '<div class="mknote"><b>Before you message anyone:</b> only market to people who have agreed to hear from you (UK GDPR and PECR). Imported contacts start as <b>Unknown</b>. Mark them <b>Opted in</b> once they agree, and <b>Opted out</b> if they ask you to stop.</div>'+
+  '<div class="mkbar"><input id="mkQ" type="search" placeholder="Search contacts" aria-label="Search contacts" value="'+esc(mkQuery)+'"><select id="mkConsent" aria-label="Filter by consent"><option value="">All consent</option><option value="yes">Opted in</option><option value="unknown">Unknown</option><option value="no">Opted out</option></select><select id="mkGroup" aria-label="Filter by group"></select>'+
+  '<button type="button" class="btn" data-mkadd="1">Add contact</button><label class="btn ghost mkimp">Import<input type="file" id="mkImp" accept=".csv,.vcf,text/csv,text/vcard,text/x-vcard,text/plain" hidden></label><button type="button" class="btn ghost" data-mkexp="1">Export CSV</button><span id="mkCount" class="muted"></span></div>'+
+  '<div id="mkList"></div>';
+}
+function mkGroups(){var g={};mkItems.forEach(function(c){if(c.group)g[c.group]=1});return Object.keys(g).sort()}
+function mkFiltered(){
+  var q=mkQuery.trim().toLowerCase();
+  return mkItems.filter(function(c){
+    if(mkConsent&&(c.consent||'unknown')!==mkConsent)return false;
+    if(mkGroup&&(c.group||'')!==mkGroup)return false;
+    if(!q)return true;
+    return ((c.name||'')+' '+(c.phone||'')+' '+(c.email||'')+' '+(c.group||'')+' '+(c.notes||'')).toLowerCase().indexOf(q)>=0;
+  }).sort(function(a,b){return (a.name||a.phone||a.email||'').toLowerCase()<(b.name||b.phone||b.email||'').toLowerCase()?-1:1});
+}
+function mkList(){
+  var box=$('#mkList');if(!box)return;
+  var gs=mkGroups(),key=gs.join('|')+'#'+mkGroup,sel=$('#mkGroup');
+  if(sel&&mkGroupKey!==key){mkGroupKey=key;sel.innerHTML='<option value="">All groups</option>'+gs.map(function(g){return '<option value="'+esc(g)+'"'+(g===mkGroup?' selected':'')+'>'+esc(g)+'</option>'}).join('')}
+  var cs=$('#mkConsent');if(cs&&cs.value!==mkConsent)cs.value=mkConsent;
+  var l=mkFiltered(),n=mkItems.length,shown=l.slice(0,500);
+  var ct=$('#mkCount');if(ct)ct.textContent=l.length===n?n+' contact'+(n===1?'':'s'):l.length+' of '+n+' shown';
+  if(!n){box.innerHTML='<div class="empty"><h2>No contacts yet</h2>Use Import to load a CSV or vCard (.vcf) file, or Add contact to type one in.</div>';return}
+  if(!l.length){box.innerHTML='<div class="muted" style="margin-top:12px">No contacts match.</div>';return}
+  box.innerHTML='<div class="tw"><table><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Group</th><th>Consent</th><th>Notes</th></tr></thead><tbody>'+shown.map(function(c){
+    var k=c.consent||'unknown';
+    return '<tr class="click" data-mkedit="'+esc(c.id)+'"><td><b>'+esc(c.name||'(no name)')+'</b></td><td class="num">'+esc(c.phone||'')+'</td><td>'+esc(c.email||'')+'</td><td>'+esc(c.group||'')+'</td><td><span class="chip mk-'+k+'">'+MK_LABEL[k]+'</span></td><td class="ntc"><div class="nl1">'+esc(c.notes||'')+'</div></td></tr>';
+  }).join('')+'</tbody></table></div>'+(l.length>shown.length?'<div class="muted" style="margin-top:8px">Showing the first 500. Use search or filters to narrow the list.</div>':'');
+}
+function mkNorm(p){
+  var raw=String(p||'').trim();if(!raw)return '';
+  var plus=raw.charAt(0)==='+',d=raw.replace(/\D/g,'');if(!d)return '';
+  if(!plus&&d.slice(0,2)==='00'){plus=true;d=d.slice(2)}
+  if(plus)return '+'+d;
+  if(d.charAt(0)==='0')return '+44'+d.slice(1);
+  if(d.slice(0,2)==='44'&&d.length>=12)return '+'+d;
+  if(d.length===10&&d.charAt(0)==='7')return '+44'+d;
+  return d;
+}
+function mkKey(c){return c.phone?'p'+c.phone:c.email?'e'+c.email.toLowerCase():'n'+(c.name||'').toLowerCase()}
+function mkId(){return 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function mkCsvRows(t){
+  var rows=[],row=[],f='',q=false,i=0,c;
+  var first=t.split(/\r?\n/)[0]||'',dl=',';
+  [',',';','\t'].forEach(function(d){if(first.split(d).length>first.split(dl).length)dl=d});
+  for(i=0;i<t.length;i++){
+    c=t.charAt(i);
+    if(q){if(c==='"'){if(t.charAt(i+1)==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===dl){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t.charAt(i+1)==='\n')i++;row.push(f);f='';if(row.some(function(x){return x.trim()}))rows.push(row);row=[]}
+    else f+=c;
+  }
+  row.push(f);if(row.some(function(x){return x.trim()}))rows.push(row);
+  return rows;
+}
+function mkParseCsv(t){
+  var rows=mkCsvRows(t.replace(/^﻿/,''));if(!rows.length)return [];
+  var hasData=function(r){return r.some(function(x){return /@/.test(x)||x.replace(/\D/g,'').length>=7})};
+  var head=!hasData(rows[0]),out=[];
+  if(head){
+    var h=rows[0].map(function(x){return x.trim().toLowerCase()}),body=rows.slice(1);
+    var idx=function(re){var r=[];h.forEach(function(x,i){if(re.test(x))r.push(i)});return r};
+    var nm=idx(/^(name|full name|display name|contact name|contact)$/),fn=idx(/^(first name|given name|first)$/),ln=idx(/^(last name|family name|surname|last)$/),
+        ph=idx(/phone|mobile|tel|number|whatsapp/),em=idx(/e-?mail/),gr=idx(/^(group|groups|label|labels|source|list|group membership)$/),no=idx(/note/),co=idx(/consent|opt/);
+    body.forEach(function(r){
+      var g=function(a){for(var i=0;i<a.length;i++){var v=(r[a[i]]||'').trim();if(v)return v}return ''};
+      var name=g(nm)||((g(fn)+' '+g(ln)).trim()),cv=g(co).toLowerCase();
+      out.push({name:name,phone:g(ph),email:g(em),group:g(gr).replace(/\s*:::\s*\*?$/,''),notes:g(no),consent:/^(yes|y|opted in|opt in|true|1)$/.test(cv)?'yes':/^(no|n|opted out|opt out|false|0)$/.test(cv)&&cv?'no':'unknown'});
+    });
+  }else{
+    rows.forEach(function(r){
+      var o={name:'',phone:'',email:'',group:'',notes:'',consent:'unknown'};
+      r.forEach(function(x){x=x.trim();if(!x)return;if(/@/.test(x)&&!o.email)o.email=x;else if(x.replace(/\D/g,'').length>=7&&/^[+()\d\s.-]+$/.test(x)&&!o.phone)o.phone=x;else if(!o.name)o.name=x});
+      out.push(o);
+    });
+  }
+  return out;
+}
+function mkParseVcf(t){
+  var lines=t.replace(/\r/g,'').replace(/\n[ \t]/g,'').split('\n'),out=[],cur=null;
+  lines.forEach(function(l){
+    if(/^BEGIN:VCARD/i.test(l)){cur={name:'',phone:'',email:'',group:'',notes:'',consent:'unknown'};return}
+    if(/^END:VCARD/i.test(l)){if(cur)out.push(cur);cur=null;return}
+    if(!cur)return;
+    var i=l.indexOf(':');if(i<0)return;
+    var k=l.slice(0,i).split(';')[0].toUpperCase().replace(/^ITEM\d+\./,''),v=l.slice(i+1).trim();
+    if(k==='FN'&&v)cur.name=v;
+    else if(k==='N'&&!cur.name){var p=v.split(';');cur.name=((p[1]||'')+' '+(p[0]||'')).trim()}
+    else if(k==='TEL'&&!cur.phone)cur.phone=v;
+    else if(k==='EMAIL'&&!cur.email)cur.email=v;
+    else if(k==='ORG'&&!cur.group)cur.group=v.replace(/;/g,' ').trim();
+    else if(k==='NOTE'&&!cur.notes)cur.notes=v;
+  });
+  return out;
+}
+function mkImport(file){
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var t=String(rd.result||''),raw=/BEGIN:VCARD/i.test(t)?mkParseVcf(t):mkParseCsv(t),grp=file.name.replace(/\.[^.]+$/,'').replace(/^WhatsApp (Chat|Group) with /i,'').trim();
+      var have={};mkItems.forEach(function(c){have[mkKey(c)]=1});
+      var added=0,skipped=0,empty=0;
+      raw.forEach(function(r){
+        var c={id:mkId(),name:(r.name||'').trim(),phone:mkNorm(r.phone),email:(r.email||'').trim(),group:(r.group||'').trim()||grp,notes:(r.notes||'').trim(),consent:r.consent||'unknown',added:Date.now()};
+        if(!c.name&&!c.phone&&!c.email){empty++;return}
+        var k=mkKey(c);if(have[k]){skipped++;return}
+        have[k]=1;mkItems.push(c);added++;
+      });
+      if(added)mkSave();
+      mkList();
+      toast('Imported '+added+' contact'+(added===1?'':'s')+(skipped?', skipped '+skipped+' duplicate'+(skipped===1?'':'s'):'')+(empty?', ignored '+empty+' empty row'+(empty===1?'':'s'):'')+(added?'. Consent is set to Unknown.':''),true);
+    }catch(x){toast('That file could not be read as contacts.')}
+  };
+  rd.readAsText(file);
+}
+function mkExport(){
+  var l=mkFiltered(),q=function(v){v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  var rows=[['Name','Phone','Email','Group','Consent','Notes','Added'].join(',')];
+  l.forEach(function(c){rows.push([c.name,c.phone,c.email,c.group,MK_LABEL[c.consent||'unknown'],c.notes,c.added?new Date(c.added).toISOString().slice(0,10):''].map(q).join(','))});
+  var blob=new Blob(['﻿'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='marketing-contacts-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+  toast('Exported '+l.length+' contact'+(l.length===1?'':'s'));
+}
+function mkOpen(id){
+  var c=mkItems.filter(function(x){return x.id===id})[0]||{},ov=document.createElement('div');
+  mkEditId=id||null;ov.id='mkOv';ov.className='mkov';
+  ov.innerHTML='<div class="mkpanel" role="dialog" aria-label="Contact"><h2>'+(id?'Edit contact':'Add contact')+'</h2>'+
+   '<label class="f">Name<input id="mkf-name" value="'+esc(c.name||'')+'"></label><label class="f">Phone<input id="mkf-phone" inputmode="tel" value="'+esc(c.phone||'')+'"></label><label class="f">Email<input id="mkf-email" type="email" value="'+esc(c.email||'')+'"></label><label class="f">Group or source<input id="mkf-group" value="'+esc(c.group||'')+'"></label>'+
+   '<label class="f">Consent<select id="mkf-consent"><option value="unknown"'+((c.consent||'unknown')==='unknown'?' selected':'')+'>Unknown</option><option value="yes"'+(c.consent==='yes'?' selected':'')+'>Opted in</option><option value="no"'+(c.consent==='no'?' selected':'')+'>Opted out</option></select></label><label class="f">Notes<textarea id="mkf-notes" rows="3">'+esc(c.notes||'')+'</textarea></label>'+
+   '<div class="mkact"><button type="button" class="btn" data-mksave="1">Save</button><button type="button" class="btn ghost" data-mkcancel="1">Cancel</button>'+(id?'<button type="button" class="btn ghost" id="mkDel" data-mkdel="1" style="margin-left:auto">Delete</button>':'')+'</div></div>';
+  document.body.appendChild(ov);setTimeout(function(){var f=$('#mkf-name');if(f)f.focus()},30);
+}
+function mkClose(){var o=$('#mkOv');if(o)o.remove();mkEditId=null}
+function mkSaveForm(){
+  var g=function(i){return ($('#mkf-'+i).value||'').trim()},c={name:g('name'),phone:mkNorm(g('phone')),email:g('email'),group:g('group'),notes:g('notes'),consent:$('#mkf-consent').value};
+  if(!c.name&&!c.phone&&!c.email){toast('Add a name, phone or email');return}
+  if(mkEditId){mkItems=mkItems.map(function(x){return x.id===mkEditId?Object.assign({},x,c):x})}
+  else mkItems.push(Object.assign({id:mkId(),added:Date.now()},c));
+  mkSave();mkClose();mkList();toast('Saved');
+}
+
 /* ---------- birthdays ---------- */
 var bdFilter='week',bdQuery='',bdOpen={},bdDraft={},bdTplOpen=false;
 var BD_MSGS=['Happy Birthday {name}! 🎂🎉 Wishing you a wonderful day filled with joy, laughter and all your favourite things. May the year ahead bring you good health, happiness and lots of lovely surprises.','Dear {name}, wishing you a very happy birthday! 🎈 I hope today is full of smiles, good company and a little bit of cake. Here\'s to a fantastic year ahead!','Happy Birthday {name}! 🥳 Thinking of you today and hoping you have a lovely, relaxing day with the people who matter most to you.','Many happy returns, {name}! 🎁 May your day be as special as you are, and may the coming year bring you everything you wish for.','Hi {name}, just a quick note to wish you a very happy birthday! 🌟 I hope you\'re spoiled rotten today. Enjoy every moment!','Happy Birthday {name}! 🎂 Wishing you health, happiness and success in the year ahead. Have a truly wonderful day!','Warmest birthday wishes to you, {name}! 🌸 May this new year of life bring you peace, prosperity and plenty of reasons to celebrate.','Happy Birthday {name}! 🎉 Hope your day is packed with good food, good company and lots of laughter. You deserve it!','Hello {name}, sending you my very best wishes on your birthday! 💐 May it be the start of a brilliant year for you and your family.','Happy Birthday {name}! 🥂 Here\'s to another great year. Wishing you a day full of love, laughter and wonderful surprises.','Wishing you a fantastic birthday, {name}! 🎈 Take time to enjoy today. You deserve a day that\'s all about you!','Happy Birthday {name}! ☀️ I hope today brings you plenty of joy and that the year ahead is your best yet.','Dear {name}, happy birthday! 🎂 Thank you for being a valued client. Wishing you a wonderful day and a happy, healthy year ahead.','Happy Birthday {name}! 🌹 May your day be filled with love and your year with happy moments. Enjoy every minute!','Wishing you the happiest of birthdays, {name}! 🎊 May all your wishes come true today and throughout the year ahead.'];
@@ -862,8 +1013,8 @@ var sideLater=false;
 function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var bt=bdCounts(bdPeople().list).today;
-  var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays']];
-  s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Account</button></div>';
+  var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
+  s.innerHTML='<div id="sideTools"><button type="button" class="sbtn acct" data-sideacct="1">Account</button><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'</div>';
 }
 function renderRem(){
   var s=$('#homeRem');if(!s)return;
@@ -1052,7 +1203,7 @@ function backupAll(){
   if(!loaded||!cases.length){toast('No cases to back up yet');return}
   claude.use('downloads').then(function(dl){
     if(!dl){toast('Downloads are not available in this view');return}
-    var payload={app:'Mortgage Case Desk',exportedAt:new Date().toISOString(),count:cases.length,cases:cases,notebook:notes,appointments:appts};
+    var payload={app:'Mortgage Case Desk',exportedAt:new Date().toISOString(),count:cases.length,cases:cases,notebook:notes,appointments:appts,marketing:[{id:'contacts',items:mkItems}]};
     return dl.save({filename:'case-desk-backup-'+iso(TODAY)+'.json',data:JSON.stringify(payload,null,2)}).then(function(){toast('Backup saved: '+cases.length+' cases')},function(e){if(e&&e.code!=='declined')toast('Could not save the backup')});
   });
 }
@@ -1105,6 +1256,13 @@ document.addEventListener('click',function(e){
   if(t.id==='apOv'){apClose();return}
   if(t.id==='bookBtn'){apOpen(null,iso(TODAY),openId);return}
   var bdf=t.closest&&t.closest('[data-bdf]');if(bdf){bdFilter=bdf.getAttribute('data-bdf');bdRender();return}
+  if(t.closest&&t.closest('[data-mkadd]')){mkOpen(null);return}
+  if(t.closest&&t.closest('[data-mkexp]')){mkExport();return}
+  var mke=t.closest&&t.closest('[data-mkedit]');if(mke){mkOpen(mke.getAttribute('data-mkedit'));return}
+  if(t.closest&&t.closest('[data-mksave]')){mkSaveForm();return}
+  if(t.closest&&t.closest('[data-mkcancel]')){mkClose();return}
+  if(t.id==='mkOv'){mkClose();return}
+  if(t.closest&&t.closest('[data-mkdel]')){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}var did=mkEditId;mkItems=mkItems.filter(function(x){return x.id!==did});mkSave();mkClose();mkList();toast('Contact deleted');return}
   if(t.closest&&t.closest('[data-bdgo]')){view='birthdays';bdFilter='week';render();return}
   var bdo=t.closest&&t.closest('[data-bdopen]');
   if(bdo){var ok=bdo.getAttribute('data-bdopen'),cur=bdOpen[ok]!==undefined?bdOpen[ok]:(bdFind(ok)||{days:99}).days<=7;bdOpen[ok]=!cur;bdRender();return}
@@ -1222,6 +1380,9 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
+  if(t.id==='mkConsent'){mkConsent=t.value;mkList();return}
+  if(t.id==='mkGroup'){mkGroup=t.value;mkList();return}
+  if(t.id==='mkImp'){if(t.files&&t.files[0])mkImport(t.files[0]);t.value='';return}
   if(t.matches('[data-trk]')){var f2=trFind(t.dataset.trk);if(f2)trSet(f2,{done:t.checked});return}
   if(t.matches('[data-bdchk]')){var cp2=bdFind(t.getAttribute('data-bdchk'));if(cp2)bdSetSent(cp2,t.checked);return}
   if(t.matches('[data-rtsel]')){if(t.value){nbExec(t.getAttribute('data-rtsel')==='font'?'fontName':'fontSize',t.value)}t.selectedIndex=0;return}
@@ -1262,6 +1423,7 @@ document.addEventListener('input',function(e){
   if(t.id==='f-oneDriveLink'){var od=$('#odl');if(od)od.innerHTML=odLink(t.value)}
   if(t.id==='calcCase'){var cc=cases.filter(function(x){return x.id===t.value})[0];if(cc){$('#calcAmt').value=cc.loanAmount||'';var yy=cc.termLeft||cc.termYears||'';$('#calcYrs').value=yy;$('#calcMon').value='';$('#calcRate').value=cc.rate||''}calcUpdate()}
   if(t.id==='calcAmt'||t.id==='calcYrs'||t.id==='calcMon'||t.id==='calcRate')calcUpdate();
+  if(t.id==='mkQ'){mkQuery=t.value;mkList();return}
   if(t.id==='trQ'){trQuery=t.value;renderTray()}
   if(t.id==='nbTitle'||t.id==='nbBody'){nbSched()}
   if(t.id==='nbQ'){nbQuery=t.value;nbList()}
@@ -1461,6 +1623,8 @@ claude.use('db').then(function(d){
   col=db.collection('cases');
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
+  mkCol=db.collection('marketing');
+  mkCol.onSnapshot(function(s){var d=s.docs.filter(function(x){return x.id==='contacts'})[0];mkItems=(d&&d.data().items)||[];if(view==='marketing'&&!$('#mkOv'))mkList()});
   apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();if(view==='tasks'&&!$('#apOv')){var hc2=$('#homeCal');if(hc2)hc2.innerHTML=apHome()}var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
   nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};bdCfg.islamic=(tp&&tp.islamic&&tp.islamic.length)?tp.islamic:null;var gdoc=all.filter(function(x){return x.id==='bday-gender'})[0];bdGen=(gdoc&&gdoc.map)||{};notes=all.filter(function(x){return x.id!=='bday-template'&&x.id!=='bday-gender'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){

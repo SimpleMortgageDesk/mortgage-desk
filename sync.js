@@ -11,7 +11,7 @@
   var GRAPH = 'https://graph.microsoft.com/v1.0';
   var ROOT = 'Apps / Mortgage Desk';
   var APP = '/me/drive/special/approot';
-  var COLS = ['cases', 'notebook', 'appointments'];
+  var COLS = ['cases', 'notebook', 'appointments', 'marketing'];
   var REDIRECT = CFG.redirectUri || (location.origin + location.pathname.replace(/[^\/]*$/, ''));
   var $ = function (i) { return document.getElementById(i); };
   var enc = function (p) { return p.split('/').map(encodeURIComponent).join('/'); };
@@ -93,7 +93,7 @@
   function idbDel(store, k) { if (!idb) return; try { idb.transaction(store, 'readwrite').objectStore(store).delete(k); } catch (e) {} }
   function idbClearAll() { return new Promise(function (res) { if (!idb) return res(); try { var t = idb.transaction(['docs', 'dirty'], 'readwrite'); t.objectStore('docs').clear(); t.objectStore('dirty').clear(); t.oncomplete = res; t.onerror = res; } catch (e) { res(); } }); }
 
-  var mem = { cases: {}, notebook: {}, appointments: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [], appointments: [] };
+  var mem = { cases: {}, notebook: {}, appointments: {}, marketing: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [], appointments: [], marketing: [] };
   function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); }
   function snap(col) { return { docs: Object.keys(mem[col]).map(function (id) { var d = mem[col][id].data; return { id: id, data: function () { return clone(d); } }; }) }; }
   function notify(col) { subs[col].forEach(function (cb) { try { cb(snap(col)); } catch (e) { console.error(e); } }); }
@@ -641,7 +641,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Account</h2><button class="btn ghost" data-a="close">Close</button></div>' +
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
         '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
-        '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
+        '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Save all cases as a PDF and CSV to your computer and OneDrive, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
@@ -684,6 +684,7 @@
       else if (a === 'caloff') { lset('md.cal', null); render('Calendar reminders turned off. Events already in Outlook stay there.'); }
       else if (a === 'pdfbk') { ov.remove(); openBackup(); }
       else if (a === 'pin') { ov.remove(); openPin(); }
+      else if (a === 'guide') { e.preventDefault(); openGuide(); }
       else if (a === 'out') { ov.remove(); signOut(); }
     });
   }
@@ -766,8 +767,20 @@
     window.addEventListener('focus', checkLock); window.addEventListener('pageshow', checkLock);
   }
 
+
+  function openGuide() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:260;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(520px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)"><h2 style="margin:0 0 10px;font-size:20px">Quick guide</h2>' +
+      '<ul style="margin:0 0 12px;padding-left:20px"><li><b>Tasks</b> (home page): tick things off. Tap a task to change its date or edit it.</li><li><b>Create Case</b> opens a new client. Everything saves by itself to your OneDrive.</li><li><b>Tools</b> (left bar): Mortgage Calculator, Notebook, Birthdays and Account.</li><li><b>Reminders</b> (right of the home page): mortgage reviews coming up.</li><li><b>Account</b>: set a PIN, sync, back up to PDF/CSV, restore, calendar reminders.</li></ul>' +
+      '<p style="margin:0 0 6px"><b>Please do not record</b> NI numbers, bank or sort-code details, passport numbers, income and expenditure, health or lifestyle answers, immigration share codes or benefit amounts.</p>' +
+      '<p style="margin:0 0 14px;color:#58697A">Keep your own Microsoft login private, and save your Microsoft recovery code somewhere safe.</p><button class="btn" data-g="1">Got it</button></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if ((e.target.closest && e.target.closest('[data-g]')) || e.target === ov) ov.remove(); });
+  }
+  function guideMaybe() { if (!tok() || ls('md.guide')) return false; lset('md.guide', '1'); openGuide(); return true; }
   function pinWarnMaybe() {
-    if (pinData() || !tok()) return;
+    if (!tok() || guideMaybe() || pinData()) return;
     var last = +ls('md.pinwarn') || 0; if (Date.now() - last < 7 * 86400000) return;
     lset('md.pinwarn', String(Date.now()));
     var ov = document.createElement('div');

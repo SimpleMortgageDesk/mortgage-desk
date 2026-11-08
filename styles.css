@@ -442,3 +442,20 @@ header.top nav button{font-size:16px;padding:10px 15px}
 header.top .btn{font-size:16px;padding:10px 18px}
 header.top .search{font-size:16px;padding:10px 12px;width:260px}
 header.top .in{padding-block:12px}}
+#sideTools .sbtn.acct{margin:0 0 14px}
+.mktabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:6px 0 12px}
+.mktab{background:none;border:0;padding:9px 14px;cursor:pointer;color:var(--muted);font:inherit;font-weight:600;border-bottom:3px solid transparent}
+.mktab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.mknote{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:12px}
+.mkbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.mkbar input[type=search]{flex:1 1 200px;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit}
+.mkbar select{padding:9px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;max-width:100%}
+.mkimp{cursor:pointer;display:inline-block}
+.chip.mk-yes{background:#e3f4e8;color:#1b5e20}.chip.mk-no{background:#fdecea;color:#b3261e}.chip.mk-unknown{background:var(--surface2);color:var(--muted)}
+.mkov{position:fixed;inset:0;z-index:230;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.mkpanel{background:var(--surface);color:var(--ink);width:min(480px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:20px 22px}
+.mkpanel h2{margin:0 0 12px;font-size:19px}
+.mkpanel label.f{display:block;margin-bottom:10px}
+.mkpanel input,.mkpanel select,.mkpanel textarea{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.mkact{display:flex;gap:8px;margin-top:6px}
+#mkList{display:grid;grid-template-columns:minmax(0,1fr)}
