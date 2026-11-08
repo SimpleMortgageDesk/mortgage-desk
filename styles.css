@@ -436,3 +436,9 @@ nav{flex:0 0 auto}
 @media (max-width:759px){#homeRem{display:none}}
 @media (min-width:760px){#homeCal{height:auto;min-height:0;max-height:50vh}.htk{height:auto;min-height:0}}
 @media (min-width:1100px){.homesplit{height:calc(100vh - var(--hh,64px) - 56px);grid-template-rows:auto minmax(0,1fr)}#homeCal{max-height:none}.htk{overflow:auto;align-self:stretch}.hrem{height:auto;max-height:none;position:static;align-self:stretch;overflow:auto}}
+@media (min-width:760px){header.top .brand{font-size:21px}
+header.top .brand i{width:12px;height:12px}
+header.top nav button{font-size:16px;padding:10px 15px}
+header.top .btn{font-size:16px;padding:10px 18px}
+header.top .search{font-size:16px;padding:10px 12px;width:260px}
+header.top .in{padding-block:12px}}
