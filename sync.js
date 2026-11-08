@@ -642,14 +642,16 @@
         '<p style="margin:14px 0 4px"><b>Signed in as</b><br>' + esc(acc.name || '') + ' ' + esc(acc.mail || '') + '</p>' +
         '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + '</p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0"><button class="btn" data-a="sync">Sync now</button><button class="btn ghost" data-a="backup" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" data-a="folder">Open folder in OneDrive</button></div><div style="margin:4px 0 10px"><button class="btn ghost" data-a="pin">PIN &amp; Auto-lock</button><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button></div>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Save all cases as a PDF and CSV to your computer and OneDrive, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
+        '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Restore from backup</h3><p style="margin:0 0 8px;color:#58697A">Use this if something was changed or deleted by mistake. Cases in the backup file replace the matching cases here.</p><input type="file" id="mdRes" accept=".json,application/json" style="max-width:100%">' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Calendar reminders</h3>' + (calOn()
           ? '<p style="margin:0 0 8px;color:#1b5e20">On. Booked appointments are added to your Outlook calendar with a ' + CAL_MIN + '-minute reminder.</p><button class="btn ghost" data-a="caloff">Turn off</button>'
           : '<p style="margin:0 0 8px;color:#58697A">Adds each booked appointment to your Outlook calendar with a ' + CAL_MIN + '-minute reminder, so your phone alerts you even when this app is closed. You will be asked to approve calendar access once.</p><button class="btn" data-a="calon">Turn on</button>') +
         '<p style="margin:8px 0 0;color:#58697A;font-size:12px">Only the name, time, type, method and place go to the calendar, never your notes. On your phone, use the Outlook app or add this Microsoft account to your phone calendar, and allow notifications.</p>' +
-        '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
-        '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
-        '<h3 style="margin:18px 0 6px;font-size:15px">Restore from backup</h3><p style="margin:0 0 8px;color:#58697A">Use this if something was changed or deleted by mistake. Cases in the backup file replace the matching cases here.</p><input type="file" id="mdRes" accept=".json,application/json" style="max-width:100%">' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Log out</h3><p style="margin:0 0 8px;color:#58697A">Removes the cases from this device. They stay safe in OneDrive.</p><button class="btn" data-a="out">Log out</button>' +
         '<p style="margin-top:14px;min-height:18px" id="mdAccMsg">' + esc(msg || '') + '</p></div>';
     }
@@ -763,6 +765,20 @@
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkLock(); });
     window.addEventListener('focus', checkLock); window.addEventListener('pageshow', checkLock);
   }
+
+  function pinWarnMaybe() {
+    if (pinData() || !tok()) return;
+    var last = +ls('md.pinwarn') || 0; if (Date.now() - last < 7 * 86400000) return;
+    lset('md.pinwarn', String(Date.now()));
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:240;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(420px,100%);border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)"><h2 style="margin:0 0 8px;font-size:19px">⚠️ Security reminder</h2><p style="margin:0 0 14px;color:#33444f">You have not set a PIN. Your client details are visible to anyone who picks up this device while you are signed in. A PIN locks the screen after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-w="set">Set up PIN</button><button class="btn ghost" data-w="later">Remind me in 7 days</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-w]'); if (!b) return;
+      ov.remove(); if (b.getAttribute('data-w') === 'set') openPin();
+    });
+  }
   function openPin() {
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
@@ -771,7 +787,7 @@
     function draw(msg, good) {
       var has = !!pinData(), mins = LOCK_MS / 60000;
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(460px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PIN &amp; Auto-lock</h2><button class="btn ghost" data-p="close">Close</button></div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">' + (has ? 'Change PIN &amp; Auto-lock' : 'Set up PIN') + '</h2><button class="btn ghost" data-p="close">Close</button></div>' +
         '<p style="margin:12px 0;color:#58697A">' + (has ? '<b style="color:#1b5e20">PIN is on.</b> The screen locks by itself after ' + mins + ' minutes with no activity, and you unlock it with your PIN.' : 'Set a PIN and the screen will lock by itself after ' + mins + ' minutes with no activity. Without a PIN, nothing locks.') + '</p>' +
         (has ? '<label>Current PIN<input id="pnCur" type="password" inputmode="numeric" maxlength="12" autocomplete="off" style="' + inS + '"></label>' : '') +
         '<label>' + (has ? 'New PIN' : 'Choose a PIN') + ' (4 to 8 digits)<input id="pnNew" type="password" inputmode="numeric" maxlength="8" autocomplete="off" style="' + inS + '"></label>' +
@@ -881,7 +897,7 @@
     try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
     if (!tok()) { showSignIn(''); return; }
     if (isIdle()) { await autoSignOut(); return; }
-    startIdleWatch(); startLockWatch();
+    startIdleWatch(); startLockWatch(); setTimeout(pinWarnMaybe, 2500);
     migrateToAppFolder();
     var o = $('mdSign'); if (o) o.remove();
     readyRes({ collection: collection });

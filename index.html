@@ -358,7 +358,7 @@ nav{flex:0 0 auto}
 }
 /* laptop and below: two tidy rows */
 @media (max-width:1359px){
- .brand{order:1} #nav{order:2} #newBtn{order:3} .top .sp{order:4;flex:1} #settingsBtn{order:5}
+ .brand{order:1} #nav{order:2} #newBtn{order:6} .top .sp{order:4;flex:1} #settingsBtn{order:5}
  #q.search{order:6} #nav2{order:7}
  .top .in{gap:8px 12px}
 }
@@ -440,9 +440,9 @@ nav{flex:0 0 auto}
 <div id="app">
   <header class="top"><div class="in gut">
     <div class="brand"><svg width="22" height="22" viewBox="0 0 80 80" aria-hidden="true"><path d="M40 4 L76 34 V76 H4 V34 Z" fill="#2f4a40"/><circle cx="40" cy="30" r="6" fill="#fff"/><rect x="18" y="44" width="44" height="6" rx="3" fill="#fff"/><rect x="18" y="56" width="30" height="6" rx="3" fill="#9fd8c0"/></svg><span>Mortgage <span style="font-weight:300">Desk</span></span></div>
-    <nav id="nav" aria-label="Sections"></nav><button class="btn" id="newBtn">New case</button>
+    <nav id="nav" aria-label="Sections"></nav>
     <div class="sp"></div>
-    <input id="q" class="search" type="search" placeholder="Search clients" aria-label="Search cases"><nav id="nav2" aria-label="Tools"></nav>
+    <input id="q" class="search" type="search" placeholder="Search clients" aria-label="Search cases"><button class="btn" id="newBtn">Create Case</button><nav id="nav2" aria-label="Tools"></nav>
     <button class="btn ghost" id="backupBtn" title="Save every case, with notes, tasks and protection, to a file on your computer">Backup</button><button class="btn ghost" id="settingsBtn">Account</button><button class="btn ghost" id="pdfBtn">Add from PDF</button><input type="file" id="pdfIn" accept="application/pdf,.pdf" multiple hidden aria-label="Choose PDF files">
   </div></header>
   <aside id="side" aria-label="Reminders"><div id="sideAcct"></div><div id="sideTasks"></div></aside>
@@ -452,9 +452,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 13:40";</script>
-<script src="config.js?v=202611081340"></script>
-<script src="sync.js?v=202611081340"></script>
+<script>window.MD_BUILD="2026-11-08 16:12";</script>
+<script src="config.js?v=202611081612"></script>
+<script src="sync.js?v=202611081612"></script>
 <script>
 (function(){
 'use strict';
