@@ -399,6 +399,12 @@ nav{flex:0 0 auto}
 .lkact{font-size:12px;margin-top:4px}
 .lkadd{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .lkadd input{flex:1 1 180px;min-width:0}
+
+.bdgenw{display:inline-flex;gap:0}
+.bdgenw .bdgen{border-radius:0}
+.bdgenw .bdgen:first-child{border-radius:6px 0 0 6px}
+.bdgenw .bdgen:last-child{border-radius:0 6px 6px 0;margin-left:-1px}
+.bdgen[aria-pressed="true"]{background:#2f4a40;color:#fff;border-color:#2f4a40}
 </style>
 
 <div id="app">
@@ -416,9 +422,9 @@ nav{flex:0 0 auto}
 <div id="tray" hidden></div>
 <div id="toast" hidden></div>
 
-<script>window.MD_BUILD="2026-11-08 12:07";</script>
-<script src="config.js?v=202611081207"></script>
-<script src="sync.js?v=202611081207"></script>
+<script>window.MD_BUILD="2026-11-08 12:42";</script>
+<script src="config.js?v=202611081242"></script>
+<script src="sync.js?v=202611081242"></script>
 <script>
 (function(){
 'use strict';
@@ -951,6 +957,25 @@ function bdMuslim(nm){
     return BD_MUS_SET[w]||/^(abdul|abdur|abdel|mohamm|muham|mohd)/.test(w)||/(uddin|uddeen|ullah)$/.test(w);
   });
 }
+var bdGen={};
+var BD_FEM={};('jerin thania shumaya husneara fatema-tuz nipa mitu ria rima shapla popy poly lucky happy nilufa nilufar rumana rumi shilpi lipi fatima fatema fatimah fatma aisha ayesha aysha ayisha khadija khadijah khodeja maryam mariam mary zainab zaynab zeinab sana sara sarah amina aminah asma halima hajra hina nadia nadiya nasreen nasrin nazia nazma nazneen parveen perveen rubina sabina shabana shahida shazia sultana yasmin yasmeen zahra zara rehana rukhsana razia rashida salma samira sania sobia sadia sonia tahira tasneem uzma farzana farida fouzia fozia jannat rahima rokeya ruksana rabia ruqayya ruqayyah sumaiya sumayya sumaya tahmina shamima shamsun shahnaz shahina shirin shiren sharmin sharmeen sultana jesmin jasmin laila laylah lubna madiha maheen mahnoor mehreen mehwish misbah naila nargis noreen nusrat rizwana robina roksana saima sajida shaheen sidra sumi tamanna tania tanzila umme uzma yasmina zakia zarina zubaida zeenat bushra anisa anika hafsa hafsah iqra insha kulsum kalsoom kauser kishwar maliha momina munira nafisa naseem nazira parvin rahena rehena ruma selina shakila shamim sharifa suraiya sultana tahera '.trim().split(/\s+/)).forEach(function(w){BD_FEM[w]=1});
+var BD_MALE={};('ijaz korban kurban foyjul foysal foyez ehsan ihsan ikram inam ilyaas imtiaz jamil jashim jakir kader kalam kaium khokon mamunur mannan matin mofiz motin nurul nazmul rashed rubel salauddin selim shahed shahidul tofazzul tuhin mohammed muhammad mohammad mohamed mohamad mohd md mahmoud mahmood mehmood mahmud hamza hamzah ibrahim ismail ismael yusuf yousuf yusuff usman uthman umar omar abdullah abdul abdur abdel abu bilal imran tariq kamran salman saeed saleem salim nadeem naeem shahid zahid jamal kamal kabir kobir karim rashid rasheed rafiq rafique shafiq shafique anwar aslam arif asif adnan faisal farooq faruk forhad habib harun haroon idris ilyas jahangir junaid khalid khalil masud masood mustafa nasir rizwan sadiq shoaib suleman sulaiman waseem wasim zubair zakaria zakir ahmed ahmad ahamed ali hussain hussein hossain hosen hassan hasan iqbal hafiz mirza sardar shorif sharif rahim rubel sohel monir sumon tanvir masum jahid mizan mizanur ashraful rafiqul nazrul osama usama talha yahya yaqub yacub zain zayn ayaan arman aziz amir ameen amin ashiq ashik babul belal billal dilwar enam farhan fahim fazal gulzar harris haris hanif jabir jalal javed jawad kaiser kashif liaquat luqman majid manzoor mamun masud mehdi mohsin mubarak muzammil nawaz obaid raihan rayhan ramzan rony saif shabir shafi shakil shamim shamsul shuvo siraj sultan tahir taslim tauhid wahid yasin younis zahir zia'.trim().split(/\s+/)).forEach(function(w){BD_MALE[w]=1});
+function bdGuess(nm){
+  var toks=String(nm||'').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if(!toks.length)return '';
+  if(toks[0]==='mr')return 'm';
+  if(/^(mrs|miss|ms)$/.test(toks[0]))return 'f';
+  var f=toks.filter(function(w){return !/^(mr|mrs|miss|ms|dr)$/.test(w)})[0]||'';
+  if(BD_FEM[f])return 'f';
+  if(BD_MALE[f]||/^(abdul|abdur|abdel|mohamm|muham|mohd)/.test(f)||/(uddin|uddeen|ullah)$/.test(f))return 'm';
+  if(toks.some(function(w){return /^(begum|khatun|bibi|banu|khanom|nessa)$/.test(w)}))return 'f';
+  return '';
+}
+function bdGender(p){return bdGen[p.key]||bdGuess(p.name)}
+function bdGenBtns(p){
+  var g=bdGender(p);
+  return '<span class="bdgenw" role="group" aria-label="Address as"><button type="button" class="btn ghost bdgen" data-bdgen="'+esc(p.key)+'|m" aria-pressed="'+(g==='m')+'">Brother</button><button type="button" class="btn ghost bdgen" data-bdgen="'+esc(p.key)+'|f" aria-pressed="'+(g==='f')+'">Sister</button></span>';
+}
 var bdKind={};
 function bdMode(p){return bdKind[p.key]||(p.muslim?'isl':'gen')}
 function bdIsl(){return (bdCfg.islamic&&bdCfg.islamic.length)?bdCfg.islamic:BD_ISL}
@@ -988,13 +1013,13 @@ function bdPeople(){
   return {list:list,missing:missing};
 }
 function bdCounts(list){var c={today:0,week:0,month:0,all:list.length};list.forEach(function(p){if(p.sent)return;if(p.days===0)c.today++;if(p.days<=7)c.week++;if(p.days<=30)c.month++});return c}
-function bdMessage(p){if(bdDraft[p.key]!=null)return bdDraft[p.key];var t=bdList(p)[bdPick(p)].replace(/\{name\}/g,bdFirst(p.name)),sg=bdSig().trim();return sg?t+'\n\n'+sg:t}
+function bdMessage(p){if(bdDraft[p.key]!=null)return bdDraft[p.key];var isl=bdMode(p)==='isl',g=isl?bdGender(p):'',who=g==='m'?'brother':g==='f'?'sister':bdFirst(p.name),t=bdList(p)[bdPick(p)].replace(/\{name\}/g,who),sg=bdSig().trim();if(isl&&g==='f')t=t.replace(/\bfeek\b/g,'feeki');return sg?t+'\n\n'+sg:t}
 function bdShell(){
   return '<div class="pagehead"><h1>Birthdays</h1><span class="muted">Send a birthday message with one click</span></div><div id="bdTplBox"></div><div class="filters" style="margin:10px 0"><input type="search" id="bdQ" class="search" style="width:100%" placeholder="Search by name" aria-label="Search birthdays" value="'+esc(bdQuery)+'"></div><div id="bdChips" class="chips" style="margin:10px 0"></div><div id="bdList"></div>';
 }
 function bdTplRender(){
   var b=$('#bdTplBox');if(!b)return;
-  b.innerHTML=bdTplOpen?'<div class="bdc" style="border-left-color:var(--accent)"><b>Birthday messages</b><div class="muted" style="font-size:12px;margin:2px 0 6px">'+bdMsgs().length+' messages. Each client is given one of them automatically (standard greetings). Write {name} where the first name goes, and put a line with --- between messages.</div><textarea id="bdMsgsText" rows="14">'+esc(bdMsgs().join('\n---\n'))+'</textarea><div class="muted" style="font-size:12px;margin:8px 0 2px">Signature, added at the end of every message</div><textarea id="bdSigText" rows="3">'+esc(bdSig())+'</textarea><div class="muted" style="font-size:12px;margin:10px 0 2px">Islamic greetings ('+bdIsl().length+'). Used first for clients whose names suggest they may be Muslim. Same format, with --- between messages.</div><textarea id="bdIslText" rows="10">'+esc(bdIsl().join('\n---\n'))+'</textarea><div class="add" style="margin-top:8px"><button type="button" class="btn" id="bdTplSave">Save</button><button type="button" class="btn ghost" id="bdTplReset">Reset to the standard messages</button><button type="button" class="btn ghost" id="bdTplBtn">Close</button></div></div>':'<button type="button" class="btn ghost sm" id="bdTplBtn">Edit messages and signature</button>';
+  b.innerHTML=bdTplOpen?'<div class="bdc" style="border-left-color:var(--accent)"><b>Birthday messages</b><div class="muted" style="font-size:12px;margin:2px 0 6px">'+bdMsgs().length+' messages. Each client is given one of them automatically (standard greetings). Write {name} where the first name goes, and put a line with --- between messages.</div><textarea id="bdMsgsText" rows="14">'+esc(bdMsgs().join('\n---\n'))+'</textarea><div class="muted" style="font-size:12px;margin:8px 0 2px">Signature, added at the end of every message</div><textarea id="bdSigText" rows="3">'+esc(bdSig())+'</textarea><div class="muted" style="font-size:12px;margin:10px 0 2px">Islamic greetings ('+bdIsl().length+'). Used first for clients whose names suggest they may be Muslim. Write {name} where "brother" or "sister" should go (chosen from the name, and you can change it on each client). Same format, with --- between messages.</div><textarea id="bdIslText" rows="10">'+esc(bdIsl().join('\n---\n'))+'</textarea><div class="add" style="margin-top:8px"><button type="button" class="btn" id="bdTplSave">Save</button><button type="button" class="btn ghost" id="bdTplReset">Reset to the standard messages</button><button type="button" class="btn ghost" id="bdTplBtn">Close</button></div></div>':'<button type="button" class="btn ghost sm" id="bdTplBtn">Edit messages and signature</button>';
 }
 function bdDobText(p){var y=+p.dob.slice(0,4),d=new Date(y,+p.dob.slice(5,7)-1,+p.dob.slice(8,10));return d.toLocaleDateString('en-GB',y>=1900&&y<=TODAY.getFullYear()?{day:'numeric',month:'short',year:'numeric'}:{day:'numeric',month:'short'})}
 function bdSentAt(p){var t=0;p.cases.forEach(function(c){if(c.bdaySent&&c.bdaySent[p.slug]===p.year&&c.bdaySentAt&&c.bdaySentAt[p.slug]>t)t=c.bdaySentAt[p.slug]});return t}
@@ -1005,10 +1030,10 @@ function bdItem(p){
   var c0=p.cases.slice().sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0)})[0],sa=p.sent?bdSentAt(p):0;
   var h='<div class="bdc'+(p.sent?' sent':'')+'" data-bdkey="'+esc(p.key)+'"><div class="bdh"><div><b>'+esc(p.name)+'</b> <span class="muted" style="font-size:13px">🎂 '+esc(bdDobText(p))+'</span>'+(p.sent?'<span class="bdok">✓ Sent'+(sa?' '+shortStamp(sa):'')+'</span>':'')+'</div><div class="muted" style="font-size:12px">'+meta+' · <button type="button" class="lnk" data-open="'+c0.id+'">'+(c0.clientNo?esc(c0.clientNo):'open case')+'</button></div></div>';
   if(!open)return h+'<div class="add" style="margin-top:6px"><button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Write message</button><label class="bdchk"><input type="checkbox" data-bdchk="'+esc(p.key)+'"'+(p.sent?' checked':'')+'> Sent</label></div></div>';
-  var isl=bdMode(p)==='isl',tip=isl&&p.muslim&&!bdKind[p.key]?'<div class="muted" style="font-size:12px;margin:4px 0">Suggested: Islamic greeting, chosen from the name. Check it suits this client, or switch to the standard greeting.</div>':'';
+  var isl=bdMode(p)==='isl',tip=isl&&p.muslim&&!bdKind[p.key]?'<div class="muted" style="font-size:12px;margin:4px 0">Suggested: Islamic greeting, chosen from the name. Check it suits this client, or switch to the standard greeting.</div>':'';if(isl&&!bdGender(p))tip+='<div style="font-size:12px;margin:4px 0;color:#8A5A00">Choose Brother or Sister below. The name does not show which, so the first name is used until you pick.</div>';
   return h+tip+'<textarea data-bdmsg="'+esc(p.key)+'" rows="7" aria-label="Birthday message for '+esc(p.name)+'">'+esc(bdMessage(p))+'</textarea><div class="add" style="margin-top:6px">'+
     (intl?'<button type="button" class="btn bdwa" data-bdsend="'+esc(p.key)+'">Send on WhatsApp</button>':'<span class="muted" style="align-self:center;font-size:12px">Add a phone number to the case to send on WhatsApp.</span>')+
-    '<button type="button" class="btn ghost" data-bdkind="'+esc(p.key)+'">'+(isl?'Use standard greeting':'Use Islamic greeting')+'</button><button type="button" class="btn ghost" data-bdshuf="'+esc(p.key)+'" title="Pick a different message">Another message</button><button type="button" class="btn ghost" data-bdcopy="'+esc(p.key)+'">Copy message</button><label class="bdchk"><input type="checkbox" data-bdchk="'+esc(p.key)+'"'+(p.sent?' checked':'')+'> Sent</label>'+(bdOpen[p.key]!==undefined&&p.days>7?'<button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Hide</button>':'')+'</div></div>';
+    (isl?bdGenBtns(p):'')+'<button type="button" class="btn ghost" data-bdkind="'+esc(p.key)+'">'+(isl?'Use standard greeting':'Use Islamic greeting')+'</button><button type="button" class="btn ghost" data-bdshuf="'+esc(p.key)+'" title="Pick a different message">Another message</button><button type="button" class="btn ghost" data-bdcopy="'+esc(p.key)+'">Copy message</button><label class="bdchk"><input type="checkbox" data-bdchk="'+esc(p.key)+'"'+(p.sent?' checked':'')+'> Sent</label>'+(bdOpen[p.key]!==undefined&&p.days>7?'<button type="button" class="btn ghost sm" data-bdopen="'+esc(p.key)+'">Hide</button>':'')+'</div></div>';
 }
 function bdRender(){
   var box=$('#bdList');if(!box)return;
@@ -1474,6 +1499,8 @@ document.addEventListener('click',function(e){
     var done=function(){toast('Message copied')};
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(ctx).then(done,function(){toast('Could not copy. Select the text and copy it.')});else{var ta0=document.querySelector('[data-bdmsg]');if(ta0){ta0.select();try{document.execCommand('copy');done()}catch(x){}}}
     return}
+  var bdg=t.closest&&t.closest('[data-bdgen]');
+  if(bdg){var gv=bdg.getAttribute('data-bdgen'),gi=gv.lastIndexOf('|'),gk=gv.slice(0,gi);bdGen[gk]=gv.slice(gi+1);delete bdDraft[gk];write('nb-bday-gender',function(){return nbCol.doc('bday-gender').set({map:bdGen,updatedAt:Date.now()})});bdRender();return}
   var bdk=t.closest&&t.closest('[data-bdkind]');
   if(bdk){var kp=bdFind(bdk.getAttribute('data-bdkind'));if(kp){bdKind[kp.key]=bdMode(kp)==='isl'?'gen':'isl';delete bdDraft[kp.key];bdRender()}return}
   var bdh=t.closest&&t.closest('[data-bdshuf]');
@@ -1814,7 +1841,7 @@ claude.use('db').then(function(d){
   nbCol=db.collection('notebook');
   apCol=db.collection('appointments');
   apCol.onSnapshot(function(s){appts=s.docs.map(function(x){return Object.assign({id:x.id},x.data())});if(view==='appointments'&&!$('#apOv'))render();if(view==='tasks'&&!$('#apOv')){var hc2=$('#homeCal');if(hc2)hc2.innerHTML=apHTML(true)}var na=$('#nextAppt');if(na&&openId)na.innerHTML=apNextHtml(openId);renderNav()},function(){});
-  nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};bdCfg.islamic=(tp&&tp.islamic&&tp.islamic.length)?tp.islamic:null;notes=all.filter(function(x){return x.id!=='bday-template'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
+  nbCol.onSnapshot(function(s){var all=s.docs.map(function(x){return Object.assign({id:x.id},x.data())}),tp=all.filter(function(x){return x.id==='bday-template'})[0];bdCfg=tp?(tp.messages&&tp.messages.length?{messages:tp.messages,signature:tp.signature!=null?tp.signature:''}:(tp.text?{messages:[tp.text],signature:''}:{messages:null,signature:null})):{messages:null,signature:null};bdCfg.islamic=(tp&&tp.islamic&&tp.islamic.length)?tp.islamic:null;var gdoc=all.filter(function(x){return x.id==='bday-gender'})[0];bdGen=(gdoc&&gdoc.map)||{};notes=all.filter(function(x){return x.id!=='bday-template'&&x.id!=='bday-gender'});if(view==='notebook')renderNotebook();if(view==='birthdays'){var a2=document.activeElement;if(!(a2&&a2.id==='bdTplText')){bdTplRender();bdRender()}}},function(){});
   col.onSnapshot(function(snap){
     cases=snap.docs.map(function(x){return Object.assign({id:x.id},x.data())});
     loaded=true;
