@@ -508,8 +508,40 @@ function apNextHtml(cid){
   if(!up.length)return '';
   var a=up[0];return 'Next appointment: <b>'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', '+esc(a.time)+'</b>'+(a.mode?' · '+esc(a.mode):'')+(up.length>1?' · +'+(up.length-1)+' more':'');
 }
-function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false}
+function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false;apDpM=null}
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='apDur'){apClash=false;apDpRender()}});
+var apDpM=null;
+function apT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
+function apDpRender(){
+  var box=$('#apDp');if(!box)return;
+  var oldSl=$('#apSl'),keep=oldSl?oldSl.scrollTop:null;
+  var dv=$('#apDate').value||iso(TODAY),tv=$('#apTime').value||'10:00',dur=+(($('#apDur')||{}).value)||30,pp=dv.split('-');
+  if(!apDpM)apDpM={y:+pp[0],m:+pp[1]-1};
+  var first=new Date(apDpM.y,apDpM.m,1),off=(first.getDay()+6)%7,dim=new Date(apDpM.y,apDpM.m+1,0).getDate(),tIso=iso(TODAY);
+  var live=appts.filter(function(x){return (x.status||'booked')==='booked'&&x.id!==apEditId}),cnt={};
+  live.forEach(function(x){cnt[x.date]=(cnt[x.date]||0)+1});
+  var cal='<div class="apdh"><button type="button" class="btn ghost sm" data-apdm="-1" aria-label="Previous month">&#8249;</button><b>'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><button type="button" class="btn ghost sm" data-apdm="1" aria-label="Next month">&#8250;</button></div><div class="apdg">'+
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(h){return '<span class="apdw">'+h+'</span>'}).join('');
+  for(var i=0;i<off;i++)cal+='<span></span>';
+  for(var d=1;d<=dim;d++){
+    var ds=apDpM.y+'-'+String(apDpM.m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    cal+='<button type="button" class="apdd'+(ds===dv?' sel':'')+(ds===tIso?' today':'')+'" data-apdd="'+ds+'" aria-label="'+ds+(cnt[ds]?', '+cnt[ds]+' booked':'')+'">'+d+(cnt[ds]?'<i class="apdot"></i>':'')+'</button>';
+  }
+  cal+='</div><button type="button" class="btn ghost sm" data-apdd="'+tIso+'" style="margin-top:6px">Today</button>';
+  var s0=apMin(tv),lo=Math.min(7*60,s0),hi=Math.max(21*60+45,s0),day=live.filter(function(x){return x.date===dv});
+  var sl='';
+  for(var m=lo;m<=hi;m+=15){
+    var busy=day.filter(function(x){return apMin(x.time)<m+15&&apMin(x.time)+(+x.dur||30)>m})[0];
+    sl+='<button type="button" class="apts'+(m===s0?' sel':(m>s0&&m<s0+dur?' span':''))+(busy?' busy':'')+'" data-apts="'+apT(m)+'"'+(busy?' title="Already booked: '+esc(apWho(busy))+'"':'')+'>'+apT(m)+'</button>';
+  }
+  var dd=new Date(+pp[0],+pp[1]-1,+pp[2]),sum=dd.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+', '+apT(s0)+' to '+apT(s0+dur);
+  var bk=day.slice().sort(function(a,b){return apMin(a.time)-apMin(b.time)}).map(function(x){return x.time+' '+esc(apWho(x))}).join(' &middot; ');
+  box.innerHTML='<div class="apdwrap"><div class="apdcal">'+cal+'</div><div class="apdslots"><div class="apdlbl">Time (15-minute slots)</div><div class="apdsl" id="apSl">'+sl+'</div></div></div>'+
+    '<div class="apdsum"><b>'+esc(sum)+'</b>'+(bk?'<div class="muted">Already booked that day: '+bk+'</div>':'<div class="muted">Nothing else booked that day.</div>')+'</div>';
+  var se=box.querySelector('.apts.sel'),sc=$('#apSl');if(sc){if(keep!=null)sc.scrollTop=keep;else if(se)sc.scrollTop=Math.max(0,se.offsetTop-sc.offsetTop-60)}
+}
 function apOpen(id,date,preCase){
+  apDpM=null;
   var a=id?appts.filter(function(x){return x.id===id})[0]:null;if(id&&!a)return;
   apEditId=a?a.id:null;apClash=false;
   var c=a&&apCase(a),who=a?(c?apLabel(c):(a.who||'')):'';
@@ -518,12 +550,13 @@ function apOpen(id,date,preCase){
   var o=$('#apOv');if(!o){o=document.createElement('div');o.id='apOv';document.body.appendChild(o)}
   o.innerHTML='<div class="apm" role="dialog" aria-label="Appointment"><h2>'+(a?'Edit appointment':'Book appointment')+'</h2><div class="apf">'+
     '<label class="full">Client<input type="text" id="apWho" list="apCases" value="'+esc(who)+'" placeholder="Pick a client or case number, or type a new name" autocomplete="off"></label><datalist id="apCases">'+cases.slice().sort(function(x,y){return cnum(x)-cnum(y)}).map(function(x){return '<option value="'+esc(apLabel(x))+'"></option>'}).join('')+'</datalist>'+
-    '<label>Date<input type="date" id="apDate" value="'+esc(a?a.date:(date||iso(TODAY)))+'"></label><label>Time<input type="time" id="apTime" value="'+esc(a?a.time:'10:00')+'"></label>'+
+    '<input type="hidden" id="apDate" value="'+esc(a?a.date:(date||iso(TODAY)))+'"><input type="hidden" id="apTime" value="'+esc(a?a.time:'10:00')+'"><div class="full apdp" id="apDp"></div>'+
     '<label>Type<select id="apType">'+opt(AP_TYPES,a&&a.type)+'</select></label><label>Length<select id="apDur">'+AP_DURS.map(function(v){return '<option value="'+v+'"'+(v===(a?+a.dur:30)?' selected':'')+'>'+v+' minutes</option>'}).join('')+'</select></label>'+
     '<label>How<select id="apMode">'+opt(AP_MODES,a&&a.mode)+'</select></label><label>Where or link<input type="text" id="apWhere" value="'+esc(a&&a.where||'')+'" placeholder="Address, phone number or meeting link"></label>'+
     (a?'<label class="full">Status<select id="apStatus">'+Object.keys(AP_STATUS).map(function(k){return '<option value="'+k+'"'+(k===(a.status||'booked')?' selected':'')+'>'+AP_STATUS[k]+'</option>'}).join('')+'</select></label>':'')+
     '<label class="full">Notes<textarea id="apNotes" rows="3" placeholder="What to cover, documents to bring">'+esc(a&&a.notes||'')+'</textarea></label></div>'+
     '<p id="apMsg" class="muted" style="min-height:18px;margin:8px 0 0"></p><div class="add" style="margin-top:8px"><button type="button" class="btn" id="apSave">'+(a?'Save changes':'Book it')+'</button><button type="button" class="btn ghost" data-apclose="1">Cancel</button>'+(a?'<button type="button" class="btn danger" id="apDel">Delete</button>':'')+'</div></div>';
+  apDpRender();
   setTimeout(function(){var w=$('#apWho');if(w)w.focus()},50);
 }
 function apSave(){
@@ -1372,6 +1405,9 @@ document.addEventListener('click',function(e){
   var ape=t.closest&&t.closest('[data-apedit]');if(ape){apOpen(ape.getAttribute('data-apedit'));return}
   var apk=t.closest&&t.closest('[data-apdone]');
   if(apk){var ak=apk.getAttribute('data-apdone'),aa=appts.filter(function(x){return x.id===ak})[0];if(aa){write('ap-'+ak,function(){return apCol.doc(ak).update({status:aa.status==='done'?'booked':'done',updatedAt:Date.now()})});setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
+  if(t.closest&&t.closest('[data-apdm]')){var dmb=t.closest('[data-apdm]'),dn=+dmb.getAttribute('data-apdm');apDpM=new Date(apDpM.y,apDpM.m+dn,1);apDpM={y:apDpM.getFullYear(),m:apDpM.getMonth()};apDpRender();return}
+  if(t.closest&&t.closest('[data-apdd]')){var ddb=t.closest('[data-apdd]'),dv2=ddb.getAttribute('data-apdd'),q2=dv2.split('-');$('#apDate').value=dv2;apDpM={y:+q2[0],m:+q2[1]-1};apClash=false;apDpRender();return}
+  if(t.closest&&t.closest('[data-apts]')){$('#apTime').value=t.closest('[data-apts]').getAttribute('data-apts');apClash=false;apDpRender();return}
   if(t.closest&&t.closest('[data-apclose]')){apClose();return}
   if(t.id==='apSave'){apSave();return}
   if(t.id==='apDel'){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}var did=apEditId;apClose();if(did){write('ap-'+did,function(){return apCol.doc(did).delete()});toast('Appointment deleted');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
