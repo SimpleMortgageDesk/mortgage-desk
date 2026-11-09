@@ -509,36 +509,36 @@ function apNextHtml(cid){
   var a=up[0];return 'Next appointment: <b>'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', '+esc(a.time)+'</b>'+(a.mode?' · '+esc(a.mode):'')+(up.length>1?' · +'+(up.length-1)+' more':'');
 }
 function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false;apDpM=null}
-document.addEventListener('change',function(e){if(e.target&&e.target.id==='apDur'){apClash=false;apDpRender()}});
+document.addEventListener('change',function(e){var x=e.target;if(!x)return;if(x.id==='apDur'){apClash=false;apDpRender()}else if(x.id==='apSlSel'){$('#apTime').value=x.value;apClash=false;apDpRender()}});
 var apDpM=null;
 function apT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
 function apDpRender(){
   var box=$('#apDp');if(!box)return;
-  var oldSl=$('#apSl'),keep=oldSl?oldSl.scrollTop:null;
   var dv=$('#apDate').value||iso(TODAY),tv=$('#apTime').value||'10:00',dur=+(($('#apDur')||{}).value)||30,pp=dv.split('-');
   if(!apDpM)apDpM={y:+pp[0],m:+pp[1]-1};
   var first=new Date(apDpM.y,apDpM.m,1),off=(first.getDay()+6)%7,dim=new Date(apDpM.y,apDpM.m+1,0).getDate(),tIso=iso(TODAY);
-  var live=appts.filter(function(x){return (x.status||'booked')==='booked'&&x.id!==apEditId}),cnt={};
-  live.forEach(function(x){cnt[x.date]=(cnt[x.date]||0)+1});
-  var cal='<div class="apdh"><button type="button" class="btn ghost sm" data-apdm="-1" aria-label="Previous month">&#8249;</button><b>'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><button type="button" class="btn ghost sm" data-apdm="1" aria-label="Next month">&#8250;</button></div><div class="apdg">'+
+  var live=appts.filter(function(x){return (x.status||'booked')==='booked'&&x.id!==apEditId}),by={};
+  live.forEach(function(x){(by[x.date]=by[x.date]||[]).push(x)});
+  var cal='<div class="apdh"><button type="button" class="btn ghost sm" data-apdm="-1" aria-label="Previous month">&#8249; Prev</button><b>'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><button type="button" class="btn ghost sm" data-apdm="1" aria-label="Next month">Next &#8250;</button><button type="button" class="btn ghost sm" data-apdd="'+tIso+'">Today</button></div><div class="apdg">'+
     ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(h){return '<span class="apdw">'+h+'</span>'}).join('');
   for(var i=0;i<off;i++)cal+='<span></span>';
   for(var d=1;d<=dim;d++){
-    var ds=apDpM.y+'-'+String(apDpM.m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    cal+='<button type="button" class="apdd'+(ds===dv?' sel':'')+(ds===tIso?' today':'')+'" data-apdd="'+ds+'" aria-label="'+ds+(cnt[ds]?', '+cnt[ds]+' booked':'')+'">'+d+(cnt[ds]?'<i class="apdot"></i>':'')+'</button>';
+    var ds=apDpM.y+'-'+String(apDpM.m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'),L=(by[ds]||[]).slice().sort(function(x,y){return apMin(x.time)-apMin(y.time)});
+    cal+='<button type="button" class="apdd'+(ds===dv?' sel':'')+(ds===tIso?' today':'')+'" data-apdd="'+ds+'" aria-label="'+ds+(L.length?', '+L.length+' booked':'')+'"><span class="apdn">'+d+'</span>'+
+      L.slice(0,3).map(function(x){return '<span class="apdc">'+esc(x.time)+' '+esc(apWho(x))+'</span>'}).join('')+(L.length>3?'<span class="apdc more">+'+(L.length-3)+' more</span>':'')+(L.length?'<i class="apdot"></i>':'')+'</button>';
   }
-  cal+='</div><button type="button" class="btn ghost sm" data-apdd="'+tIso+'" style="margin-top:6px">Today</button>';
-  var s0=apMin(tv),lo=Math.min(7*60,s0),hi=Math.max(21*60+45,s0),day=live.filter(function(x){return x.date===dv});
-  var sl='';
+  cal+='</div>';
+  var s0=apMin(tv),lo=Math.min(7*60,s0),hi=Math.max(21*60+45,s0),day=(by[dv]||[]).slice().sort(function(x,y){return apMin(x.time)-apMin(y.time)});
+  var opts='';
   for(var m=lo;m<=hi;m+=15){
     var busy=day.filter(function(x){return apMin(x.time)<m+15&&apMin(x.time)+(+x.dur||30)>m})[0];
-    sl+='<button type="button" class="apts'+(m===s0?' sel':(m>s0&&m<s0+dur?' span':''))+(busy?' busy':'')+'" data-apts="'+apT(m)+'"'+(busy?' title="Already booked: '+esc(apWho(busy))+'"':'')+'>'+apT(m)+'</button>';
+    opts+='<option value="'+apT(m)+'"'+(m===s0?' selected':'')+'>'+apT(m)+(busy?'  — booked: '+esc(apWho(busy)):'')+'</option>';
   }
   var dd=new Date(+pp[0],+pp[1]-1,+pp[2]),sum=dd.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+', '+apT(s0)+' to '+apT(s0+dur);
-  var bk=day.slice().sort(function(a,b){return apMin(a.time)-apMin(b.time)}).map(function(x){return x.time+' '+esc(apWho(x))}).join(' &middot; ');
-  box.innerHTML='<div class="apdwrap"><div class="apdcal">'+cal+'</div><div class="apdslots"><div class="apdlbl">Time (15-minute slots)</div><div class="apdsl" id="apSl">'+sl+'</div></div></div>'+
-    '<div class="apdsum"><b>'+esc(sum)+'</b>'+(bk?'<div class="muted">Already booked that day: '+bk+'</div>':'<div class="muted">Nothing else booked that day.</div>')+'</div>';
-  var se=box.querySelector('.apts.sel'),sc=$('#apSl');if(sc){if(keep!=null)sc.scrollTop=keep;else if(se)sc.scrollTop=Math.max(0,se.offsetTop-sc.offsetTop-60)}
+  var bk=day.map(function(x){return x.time+' '+esc(apWho(x))}).join(' &middot; ');
+  box.innerHTML='<div class="apdcal">'+cal+'</div>'+
+    '<div class="apdpick"><label class="apdsel">Time (15-minute slots)<select id="apSlSel" aria-label="Time">'+opts+'</select></label>'+
+    '<div class="apdsum"><b>'+esc(sum)+'</b>'+(bk?'<div class="muted">Already booked that day: '+bk+'</div>':'<div class="muted">Nothing else booked that day.</div>')+'</div></div>';
 }
 function apOpen(id,date,preCase){
   apDpM=null;
@@ -1407,7 +1407,6 @@ document.addEventListener('click',function(e){
   if(apk){var ak=apk.getAttribute('data-apdone'),aa=appts.filter(function(x){return x.id===ak})[0];if(aa){write('ap-'+ak,function(){return apCol.doc(ak).update({status:aa.status==='done'?'booked':'done',updatedAt:Date.now()})});setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
   if(t.closest&&t.closest('[data-apdm]')){var dmb=t.closest('[data-apdm]'),dn=+dmb.getAttribute('data-apdm');apDpM=new Date(apDpM.y,apDpM.m+dn,1);apDpM={y:apDpM.getFullYear(),m:apDpM.getMonth()};apDpRender();return}
   if(t.closest&&t.closest('[data-apdd]')){var ddb=t.closest('[data-apdd]'),dv2=ddb.getAttribute('data-apdd'),q2=dv2.split('-');$('#apDate').value=dv2;apDpM={y:+q2[0],m:+q2[1]-1};apClash=false;apDpRender();return}
-  if(t.closest&&t.closest('[data-apts]')){$('#apTime').value=t.closest('[data-apts]').getAttribute('data-apts');apClash=false;apDpRender();return}
   if(t.closest&&t.closest('[data-apclose]')){apClose();return}
   if(t.id==='apSave'){apSave();return}
   if(t.id==='apDel'){if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}var did=apEditId;apClose();if(did){write('ap-'+did,function(){return apCol.doc(did).delete()});toast('Appointment deleted');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
