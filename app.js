@@ -411,7 +411,7 @@ function openDrawer(id,draft){
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" id="lkTitle">Connected clients (0)</div><div id="linksBox"></div></aside></div></fieldset>'+
+   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
    '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add the address of each property the mortgage is secured on.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
    secFs('lender','Lender')+
      fld('lender','Lender name',c.lender)+
@@ -438,7 +438,7 @@ function openDrawer(id,draft){
    '<fieldset class="odfs"><legend>OneDrive folder</legend><label class="f">OneDrive folder link<input id="f-oneDriveLink" data-f="oneDriveLink" type="url" placeholder="Paste the OneDrive folder link for this client" value="'+esc(c.oneDriveLink)+'"><span class="pl" id="odl">'+odLink(c.oneDriveLink)+'</span></label></fieldset>'+
   '</form>'+
   '<div class="df"><div>'+(id?'<button type="button" class="btn danger" id="delBtn">Delete case</button><span class="muted" id="autoMsg" style="font-size:12px;margin-left:10px">Auto-save on (every 5 seconds)</span>':'')+'</div><div style="display:flex;gap:8px"><button type="button" class="btn ghost" data-close>Cancel</button><button type="button" class="btn" id="saveBtn">Save case</button></div></div></div>';
-  colOpen={};curLinks=((c&&c.links)||[]).map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}});renderLive();renderLinks();
+  colOpen={};lkOpen=false;curLinks=((c&&c.links)||[]).map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}});renderLive();renderLinks();
   var first=$('#drawer [data-a="name"]');if(first&&!id)first.focus();
   ntDraft=(id&&c.noteDraft)||'';prDraft=(id&&c.protDraft)||'';lastND=ntDraft;lastPD=prDraft;renderLive();
   lastAuto=id?JSON.stringify(collectForm()):null;
@@ -893,7 +893,7 @@ function noteItem(n,list,suffix,fmt){
 }
 var colOpen={};
 /* ---------- connected clients ---------- */
-var curLinks=[];
+var curLinks=[],lkOpen=false;
 var REL_OPTS=['Spouse / partner','Parent','Child','Grandparent','Grandchild','Sibling','Other relative','Friend','Colleague','Business partner','Employer','Employee','Referred by','Referred client','Other'];
 var REL_INV={'Spouse / partner':'Spouse / partner','Parent':'Child','Child':'Parent','Grandparent':'Grandchild','Grandchild':'Grandparent','Sibling':'Sibling','Other relative':'Other relative','Friend':'Friend','Colleague':'Colleague','Business partner':'Business partner','Employer':'Employee','Employee':'Employer','Referred by':'Referred client','Referred client':'Referred by','Other':'Other'};
 function lkById(id){return cases.filter(function(x){return x.id===id})[0]}
@@ -951,9 +951,11 @@ function renderLinks(){
     '<p class="muted" style="font-size:12px;margin:6px 0 0">Pick the client, then choose who they are to this client (for example Parent). The link shows on both records.</p>';
   box.innerHTML=h;
   var lt=document.getElementById('lkTitle');if(lt)lt.textContent='Connected clients ('+ed.length+')';
+  box.style.display=lkOpen?'':'none';var tg=document.getElementById('lkToggle');if(tg){tg.textContent=lkOpen?'Hide':'Show';tg.setAttribute('aria-expanded',lkOpen?'true':'false')}
 }
 document.addEventListener('click',function(e){
   var t=e.target;if(!t||!t.closest)return;
+  if(t.closest('#lkToggle')){lkOpen=!lkOpen;renderLinks();return}
   var b=t.closest('[data-lkopen]');
   if(b){e.preventDefault();var id=b.getAttribute('data-lkopen');if(openId&&document.getElementById('caseForm'))patch(openId,collectForm());openDrawer(id);return}
   b=t.closest('[data-lkdel]');
