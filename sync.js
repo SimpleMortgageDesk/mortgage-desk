@@ -320,7 +320,7 @@
   var BK_STAGE = { enquiry: 'Enquiry', factfind: 'Fact find', dip: 'AIP', application: 'FMA', offer: 'Offered', completed: 'Completed', lost: 'Closed lost' };
   var BK_INV = { 'Spouse / partner': 'Spouse / partner', 'Parent': 'Child', 'Child': 'Parent', 'Grandparent': 'Grandchild', 'Grandchild': 'Grandparent', 'Sibling': 'Sibling', 'Other relative': 'Other relative', 'Friend': 'Friend', 'Colleague': 'Colleague', 'Business partner': 'Business partner', 'Employer': 'Employee', 'Employee': 'Employer', 'Referred by': 'Referred client', 'Referred client': 'Referred by', 'Other': 'Other' };
   var bkRunning = false, bkTimer = null;
-  function bkCfg() { var c = {}; try { c = JSON.parse(ls('md.bk') || '{}'); } catch (e) {} return Object.assign({ auto: true, dev: true, od: true, last: 0, tried: 0, res: {} }, c); }
+  function bkCfg() { var c = {}; try { c = JSON.parse(ls('md.bk') || '{}'); } catch (e) {} return Object.assign({ auto: true, last: 0, tried: 0, res: {} }, c); }
   function bkSave(c) { lset('md.bk', JSON.stringify(c)); }
   function bkNames(c) { var a = (c.applicants || []).map(function (x) { return x.name; }).filter(Boolean); return a.length ? a.join(' & ') : 'Unnamed client'; }
   function bkDate(s) { if (!s) return ''; var p = String(s).split('-'); if (p.length !== 3) return String(s); var d = new Date(+p[0], +p[1] - 1, +p[2]); return isNaN(d) ? String(s) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -574,20 +574,6 @@
     return d.length >= 10 && d.length <= 15 ? d : '';
   }
   function waShow(n) { return n.length > 6 ? n.slice(0, 4) + '\u2022\u2022\u2022\u2022\u2022' + n.slice(-3) : n; }
-  function b64e(u) { var t = ''; for (var i = 0; i < u.length; i++) t += String.fromCharCode(u[i]); return btoa(t); }
-  function b64d(t) { var r = atob(t), u = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) u[i] = r.charCodeAt(i); return u; }
-  async function recKey(ans, salt) {
-    var a = String(ans).trim().toLowerCase().replace(/\s+/g, ' '), k = await crypto.subtle.importKey('raw', new TextEncoder().encode(a), 'PBKDF2', false, ['deriveKey']);
-    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 150000, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-  }
-  async function recSave(q, ans, pw) {
-    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), key = await recKey(ans, salt);
-    var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(pw)));
-    lset('md.bkq', q); lset('md.bkrec', JSON.stringify({ s: b64e(salt), i: b64e(iv), c: b64e(ct) }));
-  }
-  async function recOpen(ans) {
-    try { var r = JSON.parse(ls('md.bkrec')), key = await recKey(ans, b64d(r.s)); return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(r.i) }, key, b64d(r.c))); } catch (e) { return null; }
-  }
   function bkPdf(all, stamp, pw) {
     var it = [];
     it.push({ t: 'Mortgage Desk - case backup', b: 1, sz: 18, gap: 6 });
@@ -625,12 +611,20 @@
     return pdfBuild(it, 'Mortgage Desk backup ' + stamp, pw);
   }
   function bkIdb() { return new Promise(function (res) { try { var q = indexedDB.open('md-bk', 1); q.onupgradeneeded = function () { q.result.createObjectStore('h'); }; q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } }); }
-  var bkDirMem = null;
-  async function bkGetDir() { if (bkDirMem) return bkDirMem; var d = await bkIdb(); if (!d) return null; return new Promise(function (res) { try { var r = d.transaction('h').objectStore('h').get('dir'); r.onsuccess = function () { res(r.result || null); }; r.onerror = function () { res(null); }; } catch (e) { res(null); } }); }
-  async function bkPutDir(h) { bkDirMem = h; var d = await bkIdb(); if (!d) return; return new Promise(function (res) { try { var t = d.transaction('h', 'readwrite'); t.objectStore('h').put(h, 'dir'); t.oncomplete = function () { res(); }; t.onerror = function () { res(); }; } catch (e) { res(); } }); }
+  var bkDirMem = {};
+  var BK_FILE = 'Mortgage-Desk-Backup.zip';
+  async function bkGetDir(slot) {
+    if (bkDirMem[slot]) return bkDirMem[slot]; var d = await bkIdb(); if (!d) return null;
+    return new Promise(function (res) { try { var r = d.transaction('h').objectStore('h').get(slot); r.onsuccess = function () { res(r.result || null); }; r.onerror = function () { res(null); }; } catch (e) { res(null); } });
+  }
+  async function bkPutDir(slot, h) {
+    if (h) bkDirMem[slot] = h; else delete bkDirMem[slot];
+    var d = await bkIdb(); if (!d) return;
+    return new Promise(function (res) { try { var t = d.transaction('h', 'readwrite'); if (h) t.objectStore('h').put(h, slot); else t.objectStore('h').delete(slot); t.oncomplete = function () { res(); }; t.onerror = function () { res(); }; } catch (e) { res(); } });
+  }
   function bkCanPick() { return typeof window.showDirectoryPicker === 'function'; }
-  async function bkDevPerm(interactive) {
-    var h = await bkGetDir(); if (!h) return { ok: false, msg: 'No folder chosen yet.' };
+  async function bkPerm(slot, interactive) {
+    var h = await bkGetDir(slot); if (!h) return { none: true };
     var p = 'prompt'; try { p = await h.queryPermission({ mode: 'readwrite' }); } catch (e) {}
     if (p !== 'granted') {
       if (!interactive) return { ok: false, msg: 'Needs your permission. Open PDF/CSV Case Backup and press Back up now.' };
@@ -639,62 +633,47 @@
     }
     return { ok: true, h: h };
   }
-  async function bkToDevice(files, interactive, pre) {
-    if (bkCanPick()) {
-      var g = pre || await bkDevPerm(interactive); if (!g.ok) return g;
-      try {
-        var sub = await g.h.getDirectoryHandle('Mortgage Desk Backups', { create: true });
-        for (var i = 0; i < files.length; i++) { var fh = await sub.getFileHandle(files[i].name, { create: true }); var w = await fh.createWritable(); await w.write(files[i].blob); await w.close(); }
-        return { ok: true, msg: 'Saved to ' + g.h.name + ' / Mortgage Desk Backups' };
-      } catch (e) { return { ok: false, msg: 'Could not write to the folder (' + (e && e.name || 'error') + ').' }; }
-    }
-    if (!interactive) return { ok: false, msg: 'This browser cannot save to a folder automatically.' };
-    for (var j = 0; j < files.length; j++) {
-      var a = document.createElement('a'); a.href = URL.createObjectURL(files[j].blob); a.download = files[j].name; document.body.appendChild(a); a.click();
-      await sleep(400); a.remove(); (function (u) { setTimeout(function () { URL.revokeObjectURL(u); }, 20000); })(a.href);
-    }
-    return { ok: true, msg: 'Downloaded to this device (check your Downloads).' };
-  }
-  async function bkToOneDrive(files) {
-    if (!tok()) return { ok: false, msg: 'Not signed in.' };
-    try {
-      for (var i = 0; i < files.length; i++) {
-        var r = await gfetch(APP + ':/' + enc('Backups/' + files[i].name) + ':/content', { method: 'PUT', headers: { 'Content-Type': files[i].type }, body: files[i].blob });
-        if (!r.ok) return { ok: false, msg: 'OneDrive said ' + r.status + '.' };
-      }
-      return { ok: true, msg: 'Saved to OneDrive / Apps / Mortgage Desk / Backups' };
-    } catch (e) { return { ok: false, msg: st.offline ? 'Offline. Will retry.' : 'Could not reach OneDrive.' }; }
+  async function bkWrite(g, blob) {
+    if (!g || g.none) return null; if (!g.ok) return g;
+    try { var fh = await g.h.getFileHandle(BK_FILE, { create: true }); var w = await fh.createWritable(); await w.write(blob); await w.close(); return { ok: true, msg: 'Saved in ' + g.h.name }; }
+    catch (e) { return { ok: false, msg: 'Could not write to the folder (' + (e && e.name || 'error') + ').' }; }
   }
   async function bkRun(interactive) {
     if (bkRunning) return null;
-    var cfg = bkCfg();
-    if (!cfg.dev && !cfg.od) return { none: true };
-    var pw = bkPw(); if (!pw) return { nopw: true };
+    if (!bkPw()) return { nopw: true };
+    var pick = bkCanPick(), g1 = null, g2 = null;
+    if (pick) {
+      g1 = await bkPerm('dir', interactive); g2 = await bkPerm('dir2', interactive);
+      if (g1.none && g2.none) return { nofolder: true };
+    } else if (!interactive) return { nofolder: true };
     bkRunning = true;
     try {
-      var pre = null;
-      if (cfg.dev && bkCanPick()) pre = await bkDevPerm(interactive);
       var all = bkCases(), d = new Date(), pad = function (n) { return ('0' + n).slice(-2); };
       var day = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
       var stamp = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      var pw = bkPw();
       var zipBytes = await bkZip([
         { name: 'Mortgage-Desk-Cases-' + day + '.pdf', data: bkPdf(all, stamp, pw) },
         { name: 'Mortgage-Desk-Cases-' + day + '.csv', data: new TextEncoder().encode(bkCsv(all)) }
       ], pw);
-      var files = [{ name: 'Mortgage-Desk-Cases-' + day + '.zip', type: 'application/zip', blob: new Blob([zipBytes], { type: 'application/zip' }) }];
+      var blob = new Blob([zipBytes], { type: 'application/zip' });
       var res = { at: Date.now(), count: all.length };
-      if (cfg.dev) res.dev = await bkToDevice(files, interactive, pre);
-      if (cfg.od) res.od = await bkToOneDrive(files);
-      cfg.tried = Date.now();
-      var okAny = (res.dev && res.dev.ok) || (res.od && res.od.ok), allOk = (!cfg.dev || (res.dev && res.dev.ok)) && (!cfg.od || (res.od && res.od.ok));
-      if (allOk) cfg.last = Date.now();
+      if (pick) { res.l1 = await bkWrite(g1, blob); res.l2 = await bkWrite(g2, blob); }
+      else {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = BK_FILE; document.body.appendChild(a); a.click();
+        await sleep(400); a.remove(); (function (u) { setTimeout(function () { URL.revokeObjectURL(u); }, 20000); })(a.href);
+        res.l1 = { ok: true, msg: 'Downloaded to this device (check your Downloads).' };
+      }
+      var cfg = bkCfg(); cfg.tried = Date.now();
+      var bad = [res.l1, res.l2].some(function (x) { return x && !x.ok; });
+      if (!bad) cfg.last = Date.now();
       cfg.res = res; bkSave(cfg);
       return res;
     } finally { bkRunning = false; }
   }
   function bkTick() {
     var cfg = bkCfg();
-    if (!cfg.auto || (!cfg.dev && !cfg.od) || !bkPw() || !tok() || !Object.keys(mem.cases).length) return;
+    if (!cfg.auto || !bkPw() || !tok() || !Object.keys(mem.cases).length) return;
     var now = Date.now();
     if (now - cfg.last < 86400000) return;
     if (now - cfg.tried < 3600000) return;
@@ -703,13 +682,12 @@
   function bkStart() { setTimeout(bkTick, 20000); clearInterval(bkTimer); bkTimer = setInterval(bkTick, 600000); document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(bkTick, 3000); }); }
   function bkPaint() {
     var cfg = bkCfg(), el = $('bkStatus'); if (!el) return;
-    var r = cfg.res || {}, h = '';
-    if (cfg.last) h += 'Last full backup: ' + new Date(cfg.last).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '.<br>';
-    else h += 'No full backup yet.<br>';
+    var r = cfg.res || {}, f = function (d) { return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }, h = '';
+    h += cfg.last ? 'Last successful backup: ' + f(cfg.last) + '.' : 'No backup yet.';
     if (r.at) {
-      h += 'Last attempt ' + new Date(r.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' (' + (r.count || 0) + ' cases):';
-      if (r.dev) h += '<br>' + (r.dev.ok ? '✓' : '✗') + ' This computer: ' + esc(r.dev.msg);
-      if (r.od) h += '<br>' + (r.od.ok ? '✓' : '✗') + ' OneDrive: ' + esc(r.od.msg);
+      h += '<br>Last attempt ' + f(r.at) + ' (' + (r.count || 0) + ' cases):';
+      if (r.l1) h += '<br>' + (r.l1.ok ? '\u2713' : '\u2717') + ' Location 1: ' + esc(r.l1.msg);
+      if (r.l2) h += '<br>' + (r.l2.ok ? '\u2713' : '\u2717') + ' Location 2: ' + esc(r.l2.msg);
     }
     el.innerHTML = h;
   }
@@ -767,99 +745,68 @@
     });
   }
   async function openBackup() {
+    ['md.bkq', 'md.bkrec', 'md.bkhint', 'md.bkwa'].forEach(function (k) { if (k !== 'md.bkwa' || profGet().phone) lset(k, null); });
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(ov);
-    var dirName = ''; if (bkCanPick()) { var dh = await bkGetDir(); dirName = dh ? dh.name : ''; }
+    var names = { dir: '', dir2: '' }, pick = bkCanPick();
+    if (pick) { var h1 = await bkGetDir('dir'), h2 = await bkGetDir('dir2'); names.dir = h1 ? h1.name : ''; names.dir2 = h2 ? h2.name : ''; }
+    var box = 'padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;flex:1;min-width:150px';
+    function loc(slot, label, opt) {
+      return '<div style="display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap"><div style="flex:1;min-width:180px"><b>' + label + '</b><br><span style="color:#58697A;font-size:13px">' + (names[slot] ? 'Folder: <b>' + esc(names[slot]) + '</b>' : (opt ? 'Optional' : 'Not chosen yet')) + '</span></div>' +
+        '<button class="btn ghost sm" data-b="pick" data-slot="' + slot + '">' + (names[slot] ? 'Change' : 'Choose folder') + '</button>' + (opt && names[slot] ? '<button class="btn ghost sm" data-b="unpick" data-slot="' + slot + '">Remove</button>' : '') + '</div>';
+    }
     function draw() {
-      var c = bkCfg(), pick = bkCanPick();
+      var c = bkCfg(), hasPw = !!bkPw(), num = waNum();
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PDF/CSV Case Backup</h2><button class="btn ghost" data-b="close">Close</button></div>' +
-        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF (to read or print) and a CSV (opens in Excel), together in one password-protected ZIP file. Every place you tick gets the same file.</p>' +
-        '<h3 style="margin:14px 0 6px;font-size:15px">Where to save</h3>' +
-        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkDev"' + (c.dev ? ' checked' : '') + ' style="margin-top:3px"><span><b>This computer</b><br><span style="color:#58697A;font-size:13px">' + (pick ? (dirName ? 'Folder: <b>' + esc(dirName) + ' / Mortgage Desk Backups</b>' : 'No folder chosen yet.') + '</span><br><button class="btn ghost sm" data-b="pick" style="margin-top:6px">' + (dirName ? 'Change folder' : 'Choose folder') + '</button>' : 'This browser cannot pick a folder (phones and some browsers). Back up now will download the ZIP file to this device instead.</span>') + '</span></label>' +
-        '<label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input type="checkbox" id="bkOd"' + (c.od ? ' checked' : '') + ' style="margin-top:3px"><span><b>OneDrive</b><br><span style="color:#58697A;font-size:13px">Folder: <b>Apps / Mortgage Desk / Backups</b> (the app can only use its own OneDrive folder).</span></span></label>' +
-        '<h3 style="margin:16px 0 6px;font-size:15px">Backup password</h3>' +
-        '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (bkPw() ? 'A backup password is set. You need it to open the ZIP file, and the PDF inside uses the same password. This is separate from your Microsoft password.' : 'Set a password (at least 8 characters) before you can back up. It is separate from your Microsoft password.') + ' It is kept on this device so automatic backups can run. If you lose it, the backup files cannot be opened, so keep a copy somewhere safe.</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input id="bkPw" type="password" autocomplete="new-password" placeholder="' + (bkPw() ? 'New password' : 'Backup password') + '" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"><input id="bkPw2" type="password" autocomplete="new-password" placeholder="Confirm password" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"></div>' +
-        '<input id="bkHint" type="text" maxlength="80" value="' + esc(ls('md.bkhint') || '') + '" placeholder="Hint to jog your memory (optional, never the password itself)" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit">' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"><button class="btn" data-b="pw">' + (bkPw() ? 'Change password' : 'Save password') + '</button>' + (bkPw() ? '<button class="btn ghost" data-b="show">Show my password</button>' : '') + '<button class="btn ghost" data-b="hint">Save hint only</button></div>' +
-        (bkPw() ? '<h3 style="margin:16px 0 6px;font-size:15px">Recovery question (optional)</h3><p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (ls('md.bkrec') ? 'A recovery question is set: <b>' + esc(ls('md.bkq') || '') + '</b>. Showing your password will ask for the answer. Fill the boxes below to change it.' : 'Choose a question only you can answer. Showing your password will then ask for the answer. Pick something nobody could guess or find online.') + ' Capital letters and extra spaces in the answer do not matter. The question and a locked copy of the password are kept on this device only.</p>' +
-        '<input id="bkQ" type="text" maxlength="100" placeholder="Your question" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"><input id="bkA" type="password" autocomplete="off" placeholder="Your answer" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-b="qsave">Save question</button>' + (ls('md.bkrec') ? '<button class="btn ghost" data-b="qdel">Remove question</button>' : '') + '</div><div id="bkRecBox"></div>' +
-        '<h3 style="margin:16px 0 6px;font-size:15px">WhatsApp password reminder</h3>' +
-        (waNum() ? '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">Your mobile number comes from <a href="#" data-b="profile">My profile</a>: <b>+' + esc(waShow(waNum())) + '</b>. The button opens WhatsApp with your password ready to send to that number. You still tap Send yourself.</p><button class="btn" data-b="wasend">Send password to my WhatsApp</button>'
-        : '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">Add your mobile number in <a href="#" data-b="profile">My profile</a> and it appears here automatically, so you can send the password to your own WhatsApp.</p>') : '') +
-        '<h3 style="margin:16px 0 6px;font-size:15px">Automatic backup</h3>' +
-        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkAuto"' + (c.auto ? ' checked' : '') + ' style="margin-top:3px"><span>Back up automatically every 24 hours<br><span style="color:#58697A;font-size:13px">Runs while the app is open (on any signed-in device). If the app was closed, it runs the next time you open it.</span></span></label>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 8px"><button class="btn" data-b="run">Back up now</button></div>' +
-        '<p id="bkStatus" style="margin:8px 0;font-size:13px;color:#2b3b47"></p><p id="bkMsg" style="min-height:18px;margin:6px 0 0"></p></div>';
+        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file. Each new backup replaces the previous one.</p>' +
+        '<h3 style="margin:14px 0 4px;font-size:15px">1. Where to save</h3>' +
+        (pick ? loc('dir', 'Location 1', false) + loc('dir2', 'Location 2', true) : '<p style="margin:4px 0;color:#58697A;font-size:13px">This browser cannot save to a chosen folder (phones and some browsers). Back up now downloads the ZIP file to this device instead.</p>') +
+        '<h3 style="margin:16px 0 4px;font-size:15px">2. Backup password</h3>' +
+        '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (hasPw ? 'A password is set. You need it to open the ZIP and the PDF inside. Type a new one below to change it.' : 'Choose a password of at least 8 characters. You need it to open the backup.') + ' It is kept on this device so automatic backups can run. If you lose it the backup cannot be opened.</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px"><input id="bkPw" type="password" autocomplete="new-password" placeholder="' + (hasPw ? 'New password' : 'Password') + '" style="' + box + '"><input id="bkPw2" type="password" autocomplete="new-password" placeholder="Confirm password" style="' + box + '"></div>' +
+        '<div style="margin-top:8px"><button class="btn" data-b="pw">' + (hasPw ? 'Change password' : 'Save password') + '</button></div>' +
+        '<h3 style="margin:16px 0 4px;font-size:15px">3. Back up</h3>' +
+        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkAuto"' + (c.auto ? ' checked' : '') + ' style="margin-top:3px"><span>Back up automatically every 24 hours<br><span style="color:#58697A;font-size:13px">Runs while the app is open. If it was closed, it runs the next time you open it.</span></span></label>' +
+        '<div style="margin:12px 0 8px"><button class="btn" data-b="run">Back up now</button></div>' +
+        '<p id="bkStatus" style="margin:8px 0;font-size:13px;color:#2b3b47"></p>' +
+        (hasPw ? '<h3 style="margin:16px 0 4px;font-size:15px">Forgot the password?</h3>' + (num ? '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">Sends it to the mobile number in <a href="#" data-b="profile">My profile</a>: <b>+' + esc(waShow(num)) + '</b>. WhatsApp opens with the message ready and you press Send.</p><button class="btn ghost" data-b="wasend">Send password reminder to my WhatsApp</button>' : '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">Add your mobile number in <a href="#" data-b="profile">My profile</a> and a reminder button will appear here.</p>') : '') +
+        '<p id="bkMsg" style="min-height:18px;margin:10px 0 0"></p></div>';
       bkPaint();
     }
     draw();
     var say = function (m) { var e = $('bkMsg'); if (e) e.textContent = m; };
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
     ov.addEventListener('change', function (e) {
-      var t = e.target; if (!t || !t.id) return;
-      if (/^bk(Dev|Od|Auto)$/.test(t.id) && bkPw() && !reGate('backup')) { draw(); return; }
-      var c = bkCfg();
-      if (t.id === 'bkDev') c.dev = t.checked; else if (t.id === 'bkOd') c.od = t.checked; else if (t.id === 'bkAuto') c.auto = t.checked; else return;
-      bkSave(c); say('Saved.');
+      if (e.target && e.target.id === 'bkAuto') { var c = bkCfg(); c.auto = e.target.checked; bkSave(c); say('Saved.'); }
     });
     ov.addEventListener('click', async function (e) {
-      var b = e.target.closest && e.target.closest('[data-b]'); if (!b) return; b = b.getAttribute('data-b');
+      var el = e.target.closest && e.target.closest('[data-b]'); if (!el) return; var b = el.getAttribute('data-b'), slot = el.getAttribute('data-slot');
       if (b === 'close') ov.remove();
       else if (b === 'profile') { e.preventDefault(); ov.remove(); openProfile(); }
-      else if (/^(hint|pw|qsave|qdel|pick)$/.test(b) && bkPw() && !reGate('backup')) { return; }
-      else if (b === 'hint') { lset('md.bkhint', (($('bkHint') || {}).value || '').trim() || null); say('Hint saved.'); }
-      else if (b === 'show') {
-        if (ls('md.bkrec')) {
-          var bx = $('bkRecBox'); if (!bx) return;
-          bx.innerHTML = '<p style="margin:10px 0 6px"><b>' + esc(ls('md.bkq') || '') + '</b></p><input id="bkAns" type="password" autocomplete="off" placeholder="Your answer" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit"><button class="btn" data-b="reveal" style="margin-top:8px">Show password</button>';
-          say('Answer your recovery question to see the password.'); return;
-        }
-        var cur = bkPw(); say('Your backup password is: ' + cur + '   (hidden again in 15 seconds)');
-        setTimeout(function () { var m = $('bkMsg'); if (m && m.textContent.indexOf(cur) > -1) m.textContent = ''; }, 15000);
-      }
-      else if (b === 'reveal') {
-        var pw0 = await recOpen(($('bkAns') || {}).value || '');
-        if (pw0 == null || pw0 !== bkPw()) { say('That answer does not match.'); return; }
-        say('Your backup password is: ' + pw0 + '   (hidden again in 15 seconds)');
-        setTimeout(function () { var m = $('bkMsg'); if (m && m.textContent.indexOf(pw0) > -1) m.textContent = ''; }, 15000);
-      }
-      else if (b === 'qsave') {
-        var qq = (($('bkQ') || {}).value || '').trim(), aa = (($('bkA') || {}).value || '').trim();
-        if (qq.length < 5) { say('Please type a question (at least 5 characters).'); return; }
-        if (aa.length < 3) { say('Please type an answer (at least 3 characters).'); return; }
-        await recSave(qq, aa, bkPw()); draw(); say('Recovery question saved.');
-      }
-      else if (b === 'wasend') {
-        var wn2 = waNum(); if (!wn2 || !bkPw()) return;
-        window.open('https://wa.me/' + wn2 + '?text=' + encodeURIComponent('Mortgage Desk backup password: ' + bkPw()), '_blank', 'noopener');
-        say('WhatsApp should open. Tap Send to keep the message in your chat.');
-      }
-      else if (b === 'qdel') { lset('md.bkq', null); lset('md.bkrec', null); draw(); say('Recovery question removed.'); }
+      else if (b === 'pick') {
+        try { var h = await window.showDirectoryPicker({ mode: 'readwrite' }); await bkPutDir(slot, h); names[slot] = h.name; draw(); say('Folder chosen.'); }
+        catch (x) { if (!x || x.name !== 'AbortError') say('Could not choose that folder.'); }
+      } else if (b === 'unpick') { await bkPutDir(slot, null); names[slot] = ''; draw(); say('Location removed.'); }
       else if (b === 'pw') {
         var pv = ($('bkPw') || {}).value || '', pv2 = ($('bkPw2') || {}).value || '';
         if (pv.length < 8) { say('The password needs at least 8 characters.'); return; }
         if (/[^\x20-\x7E]/.test(pv)) { say('Please use letters, numbers and ordinary symbols only.'); return; }
         if (pv !== pv2) { say('The two passwords do not match. Please type them again.'); return; }
-        lset('md.bkhint', (($('bkHint') || {}).value || '').trim() || null);
-        lset('md.bkpw', pv); var hadQ = !!ls('md.bkrec'); lset('md.bkq', null); lset('md.bkrec', null); draw(); say('Backup password saved. Remember it: you need it to open your backups.' + (hadQ ? ' Your recovery question was cleared, so please set it again.' : ''));
-      }
-      else if (b === 'pick') {
-        try { var h = await window.showDirectoryPicker({ mode: 'readwrite' }); await bkPutDir(h); dirName = h.name; var c = bkCfg(); c.dev = true; bkSave(c); draw(); say('Folder chosen.'); }
-        catch (x) { if (!x || x.name !== 'AbortError') say('Could not choose that folder.'); }
+        lset('md.bkpw', pv); draw(); say('Password saved. Remember it: you need it to open your backups.');
+      } else if (b === 'wasend') {
+        var wn = waNum(); if (!wn || !bkPw()) return;
+        window.open('https://wa.me/' + wn + '?text=' + encodeURIComponent('Mortgage Desk backup password: ' + bkPw()), '_blank', 'noopener');
+        say('WhatsApp should open. Tap Send to keep the message in your chat.');
       } else if (b === 'run') {
         if (!bkPw()) { say('Set a backup password first.'); return; }
-        var c2 = bkCfg(); c2.dev = !!($('bkDev') || {}).checked; c2.od = !!($('bkOd') || {}).checked; c2.auto = !!($('bkAuto') || {}).checked; bkSave(c2);
-        if (!c2.dev && !c2.od) { say('Tick at least one place to save to.'); return; }
-        if (c2.dev && bkCanPick() && !(await bkGetDir())) { say('Choose a folder on this computer first.'); return; }
+        if (pick && !names.dir && !names.dir2) { say('Choose a folder for Location 1 first.'); return; }
         say('Backing up…');
-        var r = await bkRun(true);
-        bkPaint();
-        if (r && r.none) say('Tick at least one place to save to.');
-        else if (r && r.nopw) say('Set a backup password first.');
-        else if (r) say(((!r.dev || r.dev.ok) && (!r.od || r.od.ok)) ? 'Backup finished.' : 'Backup finished with a problem. See below.');
+        var r = await bkRun(true); bkPaint();
+        if (r && r.nopw) say('Set a backup password first.');
+        else if (r && r.nofolder) say('Choose a folder for Location 1 first.');
+        else if (r) say(((!r.l1 || r.l1.ok) && (!r.l2 || r.l2.ok)) ? 'Backup finished.' : 'Backup finished with a problem. See below.');
       }
     });
   }
@@ -921,7 +868,7 @@
         '<h3 style="margin:18px 0 6px;font-size:15px">My profile</h3><p style="margin:0 0 8px;color:#58697A">' + (profGet().name ? esc(profGet().name) + (profGet().biz ? ' &middot; ' + esc(profGet().biz) : '') : 'Add your name, business, mobile number and email.') + '</p><button class="btn" data-a="profile">' + (profGet().name || profGet().phone ? 'Edit profile' : 'Set up profile') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
-        '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Save all cases as a PDF and CSV to your computer and OneDrive, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Saves all cases as a password-protected ZIP (PDF and CSV) to the folders you choose, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
         '<input type="file" id="mdImp" accept=".json,application/json" style="max-width:100%">' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Restore from backup</h3><p style="margin:0 0 8px;color:#58697A">Use this if something was changed or deleted by mistake. Cases in the backup file replace the matching cases here.</p><input type="file" id="mdRes" accept=".json,application/json" style="max-width:100%">' +
