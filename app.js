@@ -203,9 +203,9 @@ function visible(){
 
 /* ---------- render shell ---------- */
 function renderNav(){updTrayBtn();
-  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
+  var items=[['cases','All cases'],['pipeline','Pipeline'],['tasks','Tasks'],['reminders','Reminders'],['calculator','Mortgage Calculator'],['appointments','Calendar'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
   var dc=dueCount(),tdc=allTasks().filter(function(x){return trBucket(x)==='over'}).length;
-  var tools={calculator:1,notebook:1,birthdays:1,marketing:1};
+  var tools={calculator:1,appointments:1,notebook:1,birthdays:1,marketing:1};
   var mk=function(list){return list.map(function(i){
     return '<button data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='reminders'&&dc?'<span class="badge">'+dc+' overdue</span>':'')+(i[0]==='tasks'&&tdc?'<span class="badge">'+tdc+' overdue</span>':'')+(i[0]==='birthdays'&&bdCounts(bdPeople().list).today?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bdCounts(bdPeople().list).today+' today</span>':'')+(i[0]==='appointments'&&apTodayN()?'<span class="badge" style="background:var(--accent-soft,#dbe9f8);color:var(--accent)">'+apTodayN()+' today</span>':'')+'</button>';
   }).join('')};
@@ -452,7 +452,7 @@ var apCol=null,appts=[],apMonth={y:TODAY.getFullYear(),m:TODAY.getMonth()},apSel
 var AP_TYPES=['Initial consultation','Fact-find','Document check','Mortgage review','Remortgage review','Offer or completion call','Follow-up','Other'];
 var AP_MODES=['Phone','Video call','In person','Office'];
 var AP_DURS=[15,30,45,60,90,120];
-var AP_STATUS={booked:'Booked',done:'Done',cancelled:'Cancelled',noshow:'No show'};
+var AP_STATUS={booked:'Booked',done:'Done',cancelled:'Cancelled',noshow:'Missed'};
 function apMin(t){var m=/^(\d\d):(\d\d)$/.exec(t||'');return m?+m[1]*60+ +m[2]:0}
 function apHM(n){n=((n%1440)+1440)%1440;return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
 function apSorted(l){return l.slice().sort(function(a,b){return (a.date+' '+(a.time||''))<(b.date+' '+(b.time||''))?-1:(a.date+' '+(a.time||''))>(b.date+' '+(b.time||''))?1:0})}
@@ -463,21 +463,21 @@ function apLabel(c){return c.clientNo?c.clientNo+' · '+names(c):names(c)}
 function apFindCase(v){v=String(v||'').trim();if(!v)return null;var no=v.split(' · ')[0].trim().toUpperCase(),c=no?cases.filter(function(x){return (x.clientNo||'').toUpperCase()===no})[0]:null;if(c)return c;var nm=v.replace(/^.* · /,'').trim().toLowerCase();return cases.filter(function(x){return names(x).toLowerCase()===nm})[0]||null}
 function apTodayN(){var t=iso(TODAY);return appts.filter(function(a){return a.date===t&&a.status!=='cancelled'&&a.status!=='done'&&a.status!=='noshow'}).length}
 function apCard(a,showDate){
-  var st=a.status||'booked',end=apHM(apMin(a.time)+(+a.dur||30));
+  var st=a.status||'booked',end=apHM(apMin(a.time)+(+a.dur||30)),past=st==='booked'&&(a.date<iso(TODAY)||(a.date===iso(TODAY)&&apMin(a.time)+(+a.dur||30)<new Date().getHours()*60+new Date().getMinutes()));
   var dl=showDate?'<span class="muted" style="font-size:12px">'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' · </span>':'';
   var meta=[a.type,a.mode,a.where].filter(Boolean).map(esc).join(' · ');
-  return '<div class="apc st-'+st+'"><div class="aptm"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact"><button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button></div></div>';
+  return '<div class="apc st-'+st+'"><div class="aptm"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+(past?'<span class="apst late">Past, still marked Booked</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact"><button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button>'+(past?'<button type="button" class="btn ghost sm" data-apmiss="'+a.id+'">Missed</button>'+(a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''):(st==='noshow'&&a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''))+'</div></div>';
 }
 function apHTML(home){
   var y=apMonth.y,mo=apMonth.m,first=new Date(y,mo,1),off=(first.getDay()+6)%7,tIso=iso(TODAY);
   var by={};appts.forEach(function(a){if(a.status==='cancelled')return;(by[a.date]=by[a.date]||[]).push(a)});
-  var h=(home?'':'<div class="pagehead"><h1>Appointments</h1><span class="muted">Book and track client appointments</span></div>')+'<div class="apwrap"><div>';
+  var h=(home?'':'<div class="pagehead"><h1>Calendar</h1><span class="muted">Every appointment, past and future. Click a day, then Edit to amend one, including missed ones.</span></div>')+'<div class="apwrap"><div>';
   h+='<div class="aphead"><h2>'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</h2><button type="button" class="btn ghost sm" data-apmonth="-1" aria-label="Previous month">‹ Prev</button><button type="button" class="btn ghost sm" data-apmonth="0">Today</button><button type="button" class="btn ghost sm" data-apmonth="1" aria-label="Next month">Next ›</button><button type="button" class="btn" data-apnew="1" style="margin-left:auto">Book appointment</button></div>';
   h+='<div class="apgrid">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){return '<div class="apdow">'+d+'</div>'}).join('');
   for(var i=0;i<42;i++){
     var d=new Date(y,mo,1-off+i),di=iso(d),l=apSorted(by[di]||[]);
     h+='<button type="button" class="apcell'+(d.getMonth()!==mo?' out':'')+(di===tIso?' today':'')+(di===apSel?' sel':'')+'" data-apday="'+di+'" aria-label="'+di+(l.length?', '+l.length+' appointments':'')+'"><span class="apn">'+d.getDate()+'</span>'+
-      l.slice(0,3).map(function(a){return '<span class="apchip'+(a.status==='done'?' done':'')+'">'+esc(a.time)+' '+esc(apWho(a))+'</span>'}).join('')+(l.length>3?'<span class="apmore">+'+(l.length-3)+' more</span>':'')+
+      l.slice(0,3).map(function(a){var late=(a.status||'booked')==='booked'&&di<tIso;return '<span class="apchip'+(a.status==='done'?' done':'')+(a.status==='noshow'?' miss':'')+(late?' late':'')+'"'+(late?' title="Past appointment still marked Booked. Open the day to update it."':'')+'>'+esc(a.time)+' '+esc(apWho(a))+'</span>'}).join('')+(l.length>3?'<span class="apmore">+'+(l.length-3)+' more</span>':'')+
       (l.length?'<span class="apdots">'+l.slice(0,6).map(function(){return '<span class="apdot"></span>'}).join('')+'</span>':'')+'</button>';
   }
   h+='</div></div><div>';
@@ -1115,7 +1115,7 @@ var sideLater=false;
 function renderSide(){
   var s=$('#sideTasks');if(!s||!document.body.classList.contains('side-on')){if(s)s.innerHTML='';return}
   var bt=bdCounts(bdPeople().list).today;
-  var items=[['calculator','Mortgage Calculator'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
+  var items=[['calculator','Mortgage Calculator'],['appointments','Calendar'],['notebook','Notebook'],['birthdays','Birthdays'],['marketing','Marketing']];
   s.innerHTML='<div id="sideTools"><div class="sh"><b>Tools</b></div>'+items.map(function(i){return '<button type="button" class="sbtn" data-v="'+i[0]+'"'+(view===i[0]?' aria-current="page"':'')+'>'+i[1]+(i[0]==='birthdays'&&bt?'<span class="badge" style="background:#fde4ee;color:#c2185b">'+bt+' today</span>':'')+'</button>'}).join('')+'<button type="button" class="sbtn acct" data-sideacct="1">Settings</button><button type="button" class="sbtn logout" id="logoutBtn">Log out</button></div>';
 }
 function renderRem(){
@@ -1404,6 +1404,10 @@ document.addEventListener('click',function(e){
   if(t.closest&&t.closest('[data-apnew]')){apOpen(null,apSel);return}
   var ape=t.closest&&t.closest('[data-apedit]');if(ape){apOpen(ape.getAttribute('data-apedit'));return}
   var apk=t.closest&&t.closest('[data-apdone]');
+  var apm2=t.closest&&t.closest('[data-apmiss]');
+  if(apm2){var mk0=apm2.getAttribute('data-apmiss');write('ap-'+mk0,function(){return apCol.doc(mk0).update({status:'noshow',updatedAt:Date.now()})});toast('Marked as missed');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);return}
+  var apr=t.closest&&t.closest('[data-aprebook]');
+  if(apr){var ra=appts.filter(function(x){return x.id===apr.getAttribute('data-aprebook')})[0];if(ra){apOpen(null,iso(TODAY),ra.caseId||null);setTimeout(function(){var ty=$('#apType'),md=$('#apMode'),dr=$('#apDur');if(ty&&ra.type)ty.value=ra.type;if(md&&ra.mode)md.value=ra.mode;if(dr&&ra.dur)dr.value=ra.dur;apDpRender()},60)}return}
   if(apk){var ak=apk.getAttribute('data-apdone'),aa=appts.filter(function(x){return x.id===ak})[0];if(aa){write('ap-'+ak,function(){return apCol.doc(ak).update({status:aa.status==='done'?'booked':'done',updatedAt:Date.now()})});setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
   if(t.closest&&t.closest('[data-apdm]')){var dmb=t.closest('[data-apdm]'),dn=+dmb.getAttribute('data-apdm');apDpM=new Date(apDpM.y,apDpM.m+dn,1);apDpM={y:apDpM.getFullYear(),m:apDpM.getMonth()};apDpRender();return}
   if(t.closest&&t.closest('[data-apdd]')){var ddb=t.closest('[data-apdd]'),dv2=ddb.getAttribute('data-apdd'),q2=dv2.split('-');$('#apDate').value=dv2;apDpM={y:+q2[0],m:+q2[1]-1};apClash=false;apDpRender();return}
