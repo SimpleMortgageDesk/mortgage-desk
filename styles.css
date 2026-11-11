@@ -515,3 +515,21 @@ header.top .sp.l{display:none}
 .apcell.today.sel,.apdd.today.sel{outline-color:#c62828}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .apcell.today,:root:not([data-theme="light"]) .apdd.today{background:#5a2323;border-color:#e57373}}
 :root[data-theme="dark"] .apcell.today,:root[data-theme="dark"] .apdd.today{background:#5a2323;border-color:#e57373}
+
+.aptm{min-width:64px}.aptm b{font-size:19px;line-height:1.1;color:#c62828;font-weight:700}
+.agtoday{background:#fbd5d5;border:2px solid #d64545;border-radius:10px;padding:8px 12px 4px;margin:4px 0 12px}
+.agtoday .agd{margin-top:0;font-size:16px}.agtoday .agd b{color:#b71c1c}
+.agtoday .apc{border-left-color:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .agtoday{background:#5a2323;border-color:#e57373}:root:not([data-theme="light"]) .aptm b,:root:not([data-theme="light"]) .agtoday .agd b{color:#ff8a80}}
+:root[data-theme="dark"] .agtoday{background:#5a2323;border-color:#e57373}:root[data-theme="dark"] .aptm b,:root[data-theme="dark"] .agtoday .agd b{color:#ff8a80}
+
+[data-apdrag]{cursor:grab;touch-action:none}
+body.apdragging,body.apdragging *{cursor:grabbing!important;user-select:none!important}
+.apghost{position:fixed;z-index:120;pointer-events:none;background:var(--accent);color:#fff;font-size:13px;padding:5px 9px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap}
+.apcell.drop,.apcell.today.drop{outline:3px solid var(--accent);outline-offset:-2px;background:var(--accent-soft,rgba(21,101,192,.14))}
+#apMvOv{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.apmv{background:var(--surface);border:1px solid var(--line);border-radius:10px;max-width:420px;width:100%;padding:16px 18px}
+.apmv h2{margin:0 0 4px;font-size:18px}.apmvwho{font-weight:700;margin-bottom:10px}
+.apmvrow{display:flex;gap:10px;align-items:baseline;margin:3px 0}.apmvrow span{min-width:42px}
+.apmv .apdsel{display:block;margin-top:10px}.apmv select{display:block;width:100%;margin-top:4px;padding:8px;font-size:15px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.apmvbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}

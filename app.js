@@ -466,7 +466,7 @@ function apCard(a,showDate){
   var st=a.status||'booked',end=apHM(apMin(a.time)+(+a.dur||30)),past=st==='booked'&&(a.date<iso(TODAY)||(a.date===iso(TODAY)&&apMin(a.time)+(+a.dur||30)<new Date().getHours()*60+new Date().getMinutes()));
   var dl=showDate?'<span class="muted" style="font-size:12px">'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' · </span>':'';
   var meta=[a.type,a.mode,a.where].filter(Boolean).map(esc).join(' · ');
-  return '<div class="apc st-'+st+'"><div class="aptm"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+(past?'<span class="apst late">Past, still marked Booked</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact"><button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button>'+(past?'<button type="button" class="btn ghost sm" data-apmiss="'+a.id+'">Missed</button>'+(a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''):(st==='noshow'&&a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''))+'</div></div>';
+  return '<div class="apc st-'+st+'"><div class="aptm" data-apdrag="'+a.id+'" title="Drag onto a day in the calendar to move it"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+(past?'<span class="apst late">Past, still marked Booked</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact"><button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button>'+(past?'<button type="button" class="btn ghost sm" data-apmiss="'+a.id+'">Missed</button>'+(a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''):(st==='noshow'&&a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''))+'</div></div>';
 }
 function apHTML(home){
   var y=apMonth.y,mo=apMonth.m,first=new Date(y,mo,1),off=(first.getDay()+6)%7,tIso=iso(TODAY);
@@ -477,7 +477,7 @@ function apHTML(home){
   for(var i=0;i<42;i++){
     var d=new Date(y,mo,1-off+i),di=iso(d),l=apSorted(by[di]||[]);
     h+='<button type="button" class="apcell'+(d.getMonth()!==mo?' out':'')+(di===tIso?' today':'')+(di===apSel?' sel':'')+'" data-apday="'+di+'" aria-label="'+di+(l.length?', '+l.length+' appointments':'')+'"><span class="apn">'+d.getDate()+'</span>'+
-      l.slice(0,3).map(function(a){var late=(a.status||'booked')==='booked'&&di<tIso;return '<span class="apchip'+(a.status==='done'?' done':'')+(a.status==='noshow'?' miss':'')+(late?' late':'')+'"'+(late?' title="Past appointment still marked Booked. Open the day to update it."':'')+'>'+esc(a.time)+' '+esc(apWho(a))+'</span>'}).join('')+(l.length>3?'<span class="apmore">+'+(l.length-3)+' more</span>':'')+
+      l.slice(0,3).map(function(a){var late=(a.status||'booked')==='booked'&&di<tIso;return '<span class="apchip'+(a.status==='done'?' done':'')+(a.status==='noshow'?' miss':'')+(late?' late':'')+'" data-apdrag="'+a.id+'"'+(late?' title="Past appointment still marked Booked. Open the day to update it."':' title="Drag to another day to move it"')+'>'+esc(a.time)+' '+esc(apWho(a))+'</span>'}).join('')+(l.length>3?'<span class="apmore">+'+(l.length-3)+' more</span>':'')+
       (l.length?'<span class="apdots">'+l.slice(0,6).map(function(){return '<span class="apdot"></span>'}).join('')+'</span>':'')+'</button>';
   }
   h+='</div></div><div>';
@@ -497,7 +497,8 @@ function apHome(){
     var di=addDays(tI,i),l=apSorted(appts.filter(function(a){return a.date===di&&(a.status||'booked')!=='cancelled'}));
     if(!l.length&&i>0)continue;
     any+=l.length;
-    h+='<div class="agd"><b>'+(i===0?'Today':i===1?'Tomorrow':'')+(i<2?' · ':'')+new Date(di+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</b><span class="muted"> · '+l.length+' appointment'+(l.length===1?'':'s')+'</span></div>'+(l.length?l.map(function(a){return apCard(a,false)}).join(''):'<div class="muted" style="margin:0 0 8px">Nothing booked today.</div>');
+    var sec='<div class="agd"><b>'+(i===0?'Today':i===1?'Tomorrow':'')+(i<2?' · ':'')+new Date(di+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</b><span class="muted"> · '+l.length+' appointment'+(l.length===1?'':'s')+'</span></div>'+(l.length?l.map(function(a){return apCard(a,false)}).join(''):'<div class="muted" style="margin:0 0 8px">Nothing booked today.</div>');
+    h+=i===0?'<div class="agtoday">'+sec+'</div>':sec;
   }
   if(!any)h+='<div class="muted" style="margin-top:6px">No appointments in the next 7 days.</div>';
   return h;
@@ -571,6 +572,72 @@ function apSave(){
   apSel=date;var pd=date.split('-');apMonth={y:+pd[0],m:+pd[1]-1};
   var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
 }
+/* ---------- drag an appointment to another day / time ---------- */
+var apDrag=null,apDragUsed=false;
+function apDragGhost(a){var g=document.createElement('div');g.className='apghost';g.textContent=(a.time||'')+' '+apWho(a);document.body.appendChild(g);return g}
+function apDragCell(x,y){var el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.apcell[data-apday]'):null}
+function apDragClear(){document.querySelectorAll('.apcell.drop').forEach(function(c){c.classList.remove('drop')})}
+function apDragEnd(){if(!apDrag)return;if(apDrag.ghost)apDrag.ghost.remove();apDragClear();document.body.classList.remove('apdragging');apDrag=null}
+document.addEventListener('pointerdown',function(e){
+  if(e.button&&e.button!==0)return;var h=e.target.closest&&e.target.closest('[data-apdrag]');if(!h)return;
+  if(!document.querySelector('.apcell[data-apday]'))return;
+  var id=h.getAttribute('data-apdrag'),a=appts.filter(function(x){return x.id===id})[0];if(!a)return;
+  apDrag={id:id,a:a,x:e.clientX,y:e.clientY,on:false,ghost:null,pid:e.pointerId,h:h};
+  try{h.setPointerCapture(e.pointerId)}catch(_){}
+});
+document.addEventListener('pointermove',function(e){
+  if(!apDrag||e.pointerId!==apDrag.pid)return;
+  if(!apDrag.on){if(Math.abs(e.clientX-apDrag.x)+Math.abs(e.clientY-apDrag.y)<7)return;apDrag.on=true;apDrag.ghost=apDragGhost(apDrag.a);document.body.classList.add('apdragging')}
+  e.preventDefault();
+  apDrag.ghost.style.left=(e.clientX+12)+'px';apDrag.ghost.style.top=(e.clientY+12)+'px';
+  var c=apDragCell(e.clientX,e.clientY);apDragClear();if(c)c.classList.add('drop');
+});
+document.addEventListener('pointerup',function(e){
+  if(!apDrag||e.pointerId!==apDrag.pid)return;
+  var d=apDrag,c=d.on?apDragCell(e.clientX,e.clientY):null;
+  apDragEnd();
+  if(!d.on)return;
+  apDragUsed=true;setTimeout(function(){apDragUsed=false},300);
+  if(c)apMoveOpen(d.id,c.getAttribute('data-apday'));
+});
+document.addEventListener('pointercancel',function(){apDragEnd()});
+function apMoveOpen(id,date){
+  var a=appts.filter(function(x){return x.id===id})[0];if(!a)return;
+  apMoveClose();
+  var s0=apMin(a.time),dur=+a.dur||30,lo=Math.min(7*60,s0),hi=Math.max(21*60+45,s0);
+  var day=appts.filter(function(x){return x.id!==id&&x.date===date&&(x.status||'booked')==='booked'}),opts='';
+  for(var m=lo;m<=hi;m+=15){var busy=day.filter(function(x){return apMin(x.time)<m+15&&apMin(x.time)+(+x.dur||30)>m})[0];
+    opts+='<option value="'+apT(m)+'"'+(m===s0?' selected':'')+'>'+apT(m)+(busy?'  — booked: '+esc(apWho(busy)):'')+'</option>'}
+  var fd=function(s){return new Date(s+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})};
+  var o=document.createElement('div');o.id='apMvOv';o.setAttribute('role','dialog');o.setAttribute('aria-label','Move appointment');
+  o.innerHTML='<div class="apmv"><h2>Move appointment</h2><div class="apmvwho">'+esc(apWho(a))+'</div>'+
+    '<div class="apmvrow"><span class="muted">From</span><b>'+fd(a.date)+', '+esc(a.time||'')+'</b></div>'+
+    '<div class="apmvrow"><span class="muted">To</span><b>'+fd(date)+(date===a.date?' <span class="muted">(same day)</span>':'')+'</b></div>'+
+    '<label class="apdsel">New time (15-minute slots)<select id="apMvTime" aria-label="New time">'+opts+'</select></label>'+
+    '<div id="apMvMsg" class="muted" style="min-height:18px;margin-top:6px"></div>'+
+    '<div class="apmvbtns"><button type="button" class="btn ghost" data-apmvx="1">Cancel</button><button type="button" class="btn" data-apmvok="1">Move</button></div></div>';
+  o.dataset.id=id;o.dataset.date=date;o.dataset.force='';
+  document.body.appendChild(o);var sel=$('#apMvTime');if(sel)sel.focus();
+}
+function apMoveClose(){var o=$('#apMvOv');if(o)o.remove()}
+function apMoveSave(){
+  var o=$('#apMvOv');if(!o)return;var id=o.dataset.id,date=o.dataset.date,time=$('#apMvTime').value,a=appts.filter(function(x){return x.id===id})[0];if(!a)return apMoveClose();
+  var dur=+a.dur||30,s0=apMin(time),e0=s0+dur,msg=$('#apMvMsg');
+  var clash=(a.status||'booked')==='booked'?appts.filter(function(x){return x.id!==id&&x.date===date&&(x.status||'booked')==='booked'&&apMin(x.time)<e0&&apMin(x.time)+(+x.dur||30)>s0}):[];
+  if(clash.length&&!o.dataset.force){o.dataset.force='1';msg.textContent='That overlaps with '+apWho(clash[0])+' at '+clash[0].time+'. Press Move again to move it anyway.';return}
+  if(date===a.date&&time===a.time){apMoveClose();return}
+  var ref=apCol.doc(id),d={date:date,time:time,updatedAt:Date.now()};
+  write('ap-'+id,function(){return ref.update(d)});
+  apSel=date;var pd=date.split('-');apMonth={y:+pd[0],m:+pd[1]-1};
+  apMoveClose();toast('Appointment moved to '+new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' '+time);
+  setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
+}
+document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;
+  if(t.closest('[data-apmvok]')){apMoveSave();return}
+  if(t.closest('[data-apmvx]')||(t.id==='apMvOv')){apMoveClose();return}
+});
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='apMvTime'){var o=$('#apMvOv');if(o){o.dataset.force='';var m=$('#apMvMsg');if(m)m.textContent=''}}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&$('#apMvOv')){apMoveClose();e.stopPropagation()}},true);
 /* ---------- marketing contacts ---------- */
 var mkCol=null,mkItems=[],mkQuery='',mkConsent='',mkGroup='',mkGroupKey='',mkEditId=null,mkTab='contacts';
 var MK_LABEL={yes:'Opted in',unknown:'Unknown',no:'Opted out'};
@@ -1397,6 +1464,7 @@ document.addEventListener('click',function(e){
     bdTplOpen=false;bdTplRender();bdRender();toast('Saved');return}
   if(t.id==='bdTplReset'){bdCfg={messages:null,signature:null,islamic:null};bdShuf={};bdDraft={};write('nb-bday-template',function(){return nbCol.doc('bday-template').delete()});bdTplRender();bdRender();toast('Template reset');return}
   var hmt=t.closest&&t.closest('[data-hmtog]');if(hmt){homeMonth=hmt.getAttribute('data-hmtog')==='1';var hc3=$('#homeCal');if(hc3)hc3.innerHTML=apHome();return}
+  if(apDragUsed){apDragUsed=false;e.preventDefault();return}
   var apd=t.closest&&t.closest('[data-apday]');
   if(apd){apSel=apd.getAttribute('data-apday');var pq=apSel.split('-');apMonth={y:+pq[0],m:+pq[1]-1};render();return}
   var apm=t.closest&&t.closest('[data-apmonth]');
