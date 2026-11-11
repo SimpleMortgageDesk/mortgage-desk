@@ -509,3 +509,9 @@ header.top .in{padding-block:12px}}
 .apchip.miss{text-decoration:line-through;opacity:.7}
 header.top .sp.l{display:none}
 @media (min-width:1200px){header.top .in{position:relative}header.top .sp:not(.l){display:block;flex:1}header.top nav#nav{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);margin:0}}
+
+.apcell.today,.apdd.today{background:#fbd5d5;border-color:#d64545;border-width:2px}
+.apcell.today .apn,.apdd.today .apdn{background:#c62828;color:#fff}
+.apcell.today.sel,.apdd.today.sel{outline-color:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .apcell.today,:root:not([data-theme="light"]) .apdd.today{background:#5a2323;border-color:#e57373}}
+:root[data-theme="dark"] .apcell.today,:root[data-theme="dark"] .apdd.today{background:#5a2323;border-color:#e57373}
