@@ -28,6 +28,14 @@
     t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 5000);
   }
   window.mdToast = toast;
+  function acctBanner(nowMail, lastMail) {
+    var b = document.createElement('div'); b.id = 'mdAcct'; b.setAttribute('role', 'alert');
+    b.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:210;background:#b71c1c;color:#fff;padding:12px 16px;font:14px system-ui,sans-serif;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)';
+    b.innerHTML = '<b>Different Microsoft account.</b><span>You are signed in as <b></b>. Last time this device used <b></b>. Each account has its own separate client list, so if your clients seem to be missing, log out and sign in with the usual account.</span><button type="button" style="margin-left:auto;background:#fff;color:#b71c1c;border:0;border-radius:6px;padding:6px 12px;font-weight:700;cursor:pointer">OK, I know</button>';
+    var bs = b.querySelectorAll('span b'); bs[0].textContent = nowMail; bs[1].textContent = lastMail;
+    b.querySelector('button').onclick = function () { b.remove(); };
+    document.body.appendChild(b);
+  }
 
   /* ---------- tokens (Microsoft sign-in, PKCE, no library) ---------- */
   function readTok() { try { return JSON.parse(localStorage.getItem('md.tok2') || 'null'); } catch (e) { return null; } }
@@ -339,7 +347,8 @@
     all.forEach(function (x) { (x.links || []).forEach(function (l) { if (l.cid === c.id) add(x, BK_INV[l.rel] || l.rel); }); });
     return out;
   }
-  var BK_COLS = ['clientNo', 'applicants', 'dates of birth', 'phones', 'emails', 'addresses', 'stage', 'type', 'repayment', 'propertyAddress', 'propertyValue', 'purchasePrice', 'loanAmount', 'termYears', 'termLeft', 'lender', 'lenderRef', 'product', 'rate', 'followOnRate', 'fixedUntil', 'reviewDate', 'erc', 'monthlyPayment', 'dipExpiry', 'offerDate', 'offerExpiry', 'completionDate', 'conveyancer', 'other security addresses', 'connected clients', 'open tasks', 'notes', 'protection notes', 'oneDriveLink'];
+  var BK_COLS = ['clientNo', 'applicants', 'dates of birth', 'phones', 'emails', 'addresses', 'stage', 'type', 'property type', 'repayment', 'propertyAddress', 'propertyValue', 'purchasePrice', 'loanAmount', 'termYears', 'termLeft', 'lender', 'lenderRef', 'product', 'rate', 'followOnRate', 'fixedUntil', 'reviewDate', 'erc', 'monthlyPayment', 'dipExpiry', 'offerDate', 'offerExpiry', 'completionDate', 'conveyancer', 'other security addresses', 'connected clients', 'open tasks', 'notes', 'protection notes', 'oneDriveLink'];
+  function bkProp(v) { return { main: 'Main residence', btl: 'Buy to let', second: 'Second home', holiday: 'Holiday home' }[v] || ''; }
   function bkTasks(c, openOnly) { return (c.tasks || []).filter(function (t) { return !openOnly || !t.done; }).map(function (t) { return (t.done ? '[done] ' : '') + (t.pri ? '[high] ' : '') + (t.text || '') + (t.due ? ' (due ' + bkDate(t.due) + (t.time ? ' ' + t.time : '') + ')' : ''); }); }
   function bkLog(arr) { return (arr || []).slice().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }).map(function (n) { return bkTs(n.ts) + ': ' + String(n.text || '').replace(/\s+/g, ' ').trim(); }); }
   function bkCsv(all) {
@@ -348,7 +357,7 @@
     all.forEach(function (c) {
       var ap = c.applicants || [];
       var r = [c.clientNo, bkNames(c), ap.map(function (a) { return a.dob ? bkDate(a.dob) : ''; }).join(' | '), ap.map(function (a) { return a.phone || ''; }).join(' | '), ap.map(function (a) { return a.email || ''; }).join(' | '), ap.map(function (a) { return a.address || ''; }).join(' | '),
-        BK_STAGE[c.stage] || c.stage, c.type, c.repayment, c.propertyAddress, c.propertyValue, c.purchasePrice, c.loanAmount, c.termYears, c.termLeft, c.lender, c.lenderRef, c.product, c.rate, c.followOnRate, c.fixedUntil, c.reviewDate, c.erc, c.monthlyPayment, c.dipExpiry, c.offerDate, c.offerExpiry, c.completionDate, c.conveyancer,
+        BK_STAGE[c.stage] || c.stage, c.type, bkProp(c.propUse), c.repayment, c.propertyAddress, c.propertyValue, c.purchasePrice, c.loanAmount, c.termYears, c.termLeft, c.lender, c.lenderRef, c.product, c.rate, c.followOnRate, c.fixedUntil, c.reviewDate, c.erc, c.monthlyPayment, c.dipExpiry, c.offerDate, c.offerExpiry, c.completionDate, c.conveyancer,
         (c.securities || []).map(function (s) { return s.address || ''; }).filter(Boolean).join(' | '), bkConn(c, all).join('; '), bkTasks(c, true).join(' | '), bkLog(c.notes).join(' | '), bkLog(c.protection).join(' | '), c.oneDriveLink];
       rows.push(r.map(q).join(','));
     });
@@ -584,12 +593,14 @@
       var ap = c.applicants || [];
       it.push({ pb: 1 });
       it.push({ t: (c.clientNo ? c.clientNo + '   ' : '') + bkNames(c), b: 1, sz: 14, gap: 2 });
-      it.push({ t: [BK_STAGE[c.stage] || c.stage, c.type, c.repayment].filter(Boolean).join('  |  '), sz: 10, gap: 6 });
+      it.push({ t: [BK_STAGE[c.stage] || c.stage, c.type, bkProp(c.propUse), c.repayment].filter(Boolean).join('  |  '), sz: 10, gap: 6 });
       it.push({ t: 'Applicants', b: 1, sz: 10.5, gap: 1 });
       ap.forEach(function (a, i) {
         it.push({ t: (i + 1) + '. ' + (a.name || '') + (a.dob ? '   DOB ' + bkDate(a.dob) : ''), ind: 6 });
         var ct = [a.phone, a.email].filter(Boolean).join('   '); if (ct) it.push({ t: ct, ind: 16 });
         if (a.address) it.push({ t: 'Address: ' + a.address, ind: 16 });
+        if (a.resMort === 'yes') it.push({ t: 'Mortgage on this address: yes' + (a.resLender ? '  |  ' + a.resLender : '') + (a.resType ? '  |  ' + a.resType : '') + (a.resDealEnd ? '  |  deal ends ' + bkDate(a.resDealEnd) : '') + (a.resBalance ? '  |  approx ' + bkGbp(a.resBalance) : '') + (a.resOwn ? '  |  ' + a.resOwn + ' name(s)' : ''), ind: 16 });
+        else if (a.resMort === 'no') it.push({ t: 'Mortgage on this address: no', ind: 16 });
       });
       var conn = bkConn(c, all);
       it.push({ t: 'Connected clients', b: 1, sz: 10.5, gap: 1 }); it.push({ t: conn.length ? conn.join('; ') : 'None', ind: 6 });
@@ -600,7 +611,7 @@
       kv('Initial term (years)', c.termYears); kv('Term left (years)', c.termLeft); kv('Rate', c.rate != null && c.rate !== '' ? c.rate + '%' : ''); kv('Follow-on rate', c.followOnRate != null && c.followOnRate !== '' ? c.followOnRate + '%' : '');
       kv('Initial deal ends', bkDate(c.fixedUntil)); kv('Review date', bkDate(c.reviewDate)); kv('Early repayment charge', c.erc); kv('Monthly payment', bkGbp(c.monthlyPayment));
       kv('AIP expiry', bkDate(c.dipExpiry)); kv('Offer date', bkDate(c.offerDate)); kv('Offer expiry', bkDate(c.offerExpiry)); kv('Completion date', bkDate(c.completionDate)); kv('Conveyancer', c.conveyancer);
-      (c.securities || []).forEach(function (s, i) { if (s.address) it.push({ t: 'Security ' + (i + 1) + ': ' + s.address + (s.lender ? '  |  ' + s.lender : '') + (s.product ? '  |  ' + s.product : '') + (s.loanAmount ? '  |  ' + bkGbp(s.loanAmount) : '') + (s.fixedUntil ? '  |  deal ends ' + bkDate(s.fixedUntil) : ''), ind: 6 }); });
+      (c.securities || []).forEach(function (s, i) { if (s.address) it.push({ t: 'Other property ' + (i + 1) + ({ btl: ' (Buy to let)', second: ' (Second home)', holiday: ' (Holiday home)', other: ' (Other)' }[s.use] || '') + ': ' + s.address + (s.lender ? '  |  ' + s.lender : '') + (s.product ? '  |  ' + s.product : '') + (s.loanAmount ? '  |  ' + bkGbp(s.loanAmount) : '') + (s.fixedUntil ? '  |  deal ends ' + bkDate(s.fixedUntil) : ''), ind: 6 }); });
       var ts = bkTasks(c, false);
       it.push({ t: 'Tasks', b: 1, sz: 10.5, gap: 1 }); if (!ts.length) it.push({ t: 'None', ind: 6 }); ts.forEach(function (t) { it.push({ t: '- ' + t, ind: 6, hang: 8 }); });
       var ns = bkLog(c.notes);
@@ -749,7 +760,7 @@
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(ov);
-    var names = { dir: '', dir2: '' }, pick = bkCanPick();
+    var names = { dir: '', dir2: '' }, pick = bkCanPick(), editPw = false;
     if (pick) { var h1 = await bkGetDir('dir'), h2 = await bkGetDir('dir2'); names.dir = h1 ? h1.name : ''; names.dir2 = h2 ? h2.name : ''; }
     var box = 'padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;flex:1;min-width:150px';
     function loc(slot, label, opt) {
@@ -757,16 +768,16 @@
         '<button class="btn ghost sm" data-b="pick" data-slot="' + slot + '">' + (names[slot] ? 'Change' : 'Choose folder') + '</button>' + (opt && names[slot] ? '<button class="btn ghost sm" data-b="unpick" data-slot="' + slot + '">Remove</button>' : '') + '</div>';
     }
     function draw() {
-      var c = bkCfg(), hasPw = !!bkPw(), num = waNum();
+      var c = bkCfg(), hasPw = !!bkPw(), num = waNum(), editing = !hasPw || editPw, dis = editing ? '' : ' disabled', dstyle = editing ? '' : ';background:#EDF0F1;color:#8a98a3';
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PDF/CSV Case Backup</h2><button class="btn ghost" data-b="close">Close</button></div>' +
         '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file. Each new backup replaces the previous one.</p>' +
         '<h3 style="margin:14px 0 4px;font-size:15px">1. Where to save</h3>' +
         (pick ? loc('dir', 'Location 1', false) + loc('dir2', 'Location 2', true) : '<p style="margin:4px 0;color:#58697A;font-size:13px">This browser cannot save to a chosen folder (phones and some browsers). Back up now downloads the ZIP file to this device instead.</p>') +
         '<h3 style="margin:16px 0 4px;font-size:15px">2. Backup password</h3>' +
-        '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (hasPw ? 'A password is set. You need it to open the ZIP and the PDF inside. Type a new one below to change it.' : 'Choose a password of at least 8 characters. You need it to open the backup.') + ' It is kept on this device so automatic backups can run. If you lose it the backup cannot be opened.</p>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:8px"><input id="bkPw" type="password" autocomplete="new-password" placeholder="' + (hasPw ? 'New password' : 'Password') + '" style="' + box + '"><input id="bkPw2" type="password" autocomplete="new-password" placeholder="Confirm password" style="' + box + '"></div>' +
-        '<div style="margin-top:8px"><button class="btn" data-b="pw">' + (hasPw ? 'Change password' : 'Save password') + '</button></div>' +
+        '<p style="margin:4px 0 8px;color:#58697A;font-size:13px">' + (hasPw ? (editing ? 'Type the new password twice, then press Save password.' : 'A password is saved. You need it to open the ZIP and the PDF inside. Press Change password to set a new one.') : 'Choose a password of at least 8 characters. You need it to open the backup.') + ' It is kept on this device so automatic backups can run. If you lose it the backup cannot be opened.</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px"><input id="bkPw"' + dis + ' type="password" autocomplete="new-password" placeholder="' + (hasPw ? (editing ? 'New password' : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022') : 'Password') + '" style="' + box + dstyle + '"><input id="bkPw2"' + dis + ' type="password" autocomplete="new-password" placeholder="Confirm password" style="' + box + dstyle + '"></div>' +
+        '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn" data-b="' + (editing ? 'pw' : 'pwedit') + '">' + (editing ? 'Save password' : 'Change password') + '</button>' + (hasPw && editing ? '<button class="btn ghost" data-b="pwcancel">Cancel</button>' : '') + '</div>' +
         '<h3 style="margin:16px 0 4px;font-size:15px">3. Back up</h3>' +
         '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" id="bkAuto"' + (c.auto ? ' checked' : '') + ' style="margin-top:3px"><span>Back up automatically every 24 hours<br><span style="color:#58697A;font-size:13px">Runs while the app is open. If it was closed, it runs the next time you open it.</span></span></label>' +
         '<div style="margin:12px 0 8px"><button class="btn" data-b="run">Back up now</button></div>' +
@@ -789,12 +800,14 @@
         try { var h = await window.showDirectoryPicker({ mode: 'readwrite' }); await bkPutDir(slot, h); names[slot] = h.name; draw(); say('Folder chosen.'); }
         catch (x) { if (!x || x.name !== 'AbortError') say('Could not choose that folder.'); }
       } else if (b === 'unpick') { await bkPutDir(slot, null); names[slot] = ''; draw(); say('Location removed.'); }
+      else if (b === 'pwedit') { editPw = true; draw(); var f = $('bkPw'); if (f) f.focus(); }
+      else if (b === 'pwcancel') { editPw = false; draw(); }
       else if (b === 'pw') {
         var pv = ($('bkPw') || {}).value || '', pv2 = ($('bkPw2') || {}).value || '';
         if (pv.length < 8) { say('The password needs at least 8 characters.'); return; }
         if (/[^\x20-\x7E]/.test(pv)) { say('Please use letters, numbers and ordinary symbols only.'); return; }
         if (pv !== pv2) { say('The two passwords do not match. Please type them again.'); return; }
-        lset('md.bkpw', pv); draw(); say('Password saved. Remember it: you need it to open your backups.');
+        lset('md.bkpw', pv); editPw = false; draw(); say('Password saved. Remember it: you need it to open your backups.');
       } else if (b === 'wasend') {
         var wn = waNum(); if (!wn || !bkPw()) return;
         window.open('https://wa.me/' + wn + '?text=' + encodeURIComponent('Mortgage Desk backup password: ' + bkPw()), '_blank', 'noopener');
@@ -1124,6 +1137,12 @@
     try {
       var me = await (await gfetch('/me?$select=displayName,mail,userPrincipalName')).json();
       var t = tok(); t.account = { name: me.displayName || '', mail: me.mail || me.userPrincipalName || '' }; setTok(t); meMail = t.account.mail;
+    } catch (e) {}
+    /* Warn when this is a different Microsoft account from the one used here last time (each account has its own, separate client list). */
+    try {
+      var lastM = String(ls('md.lastMail') || '').toLowerCase(), nowM = String(meMail || '').toLowerCase();
+      if (nowM && lastM && nowM !== lastM && ls('md.reauth') !== '1') acctBanner(meMail, ls('md.lastMail'));
+      if (nowM && ls('md.reauth') !== '1') lset('md.lastMail', meMail);
     } catch (e) {}
     if (ls('md.reauth') === '1') {
       lset('md.reauth', null);

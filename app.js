@@ -37,6 +37,12 @@ function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function
 function cno(c){return c.clientNo?' <span class="cno">'+esc(c.clientNo)+'</span>':''}
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
+var PROP_TYPES=[['','Not set'],['main','Main residence'],['btl','Buy to let'],['second','Second home'],['holiday','Holiday home']];
+function propLabel(v){var o=PROP_TYPES.filter(function(q){return q[0]===v})[0];return o&&o[0]?o[1]:''}
+function propTag(c){var l=propLabel(c.propUse);return l?' <span class="ptag '+esc(c.propUse)+'">'+esc(l)+'</span>':''}
+/* Same client = same applicant names and dates of birth (any order). A joint case with a different second person is a different client. */
+function clientKey(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim().toLowerCase().replace(/\s+/g,' ')+'|'+(x.dob||'')}).filter(function(s){return s!=='|'});return a.length?a.sort().join('||'):'#'+c.id}
+function sameClient(c){var k=clientKey(c);return cases.filter(function(x){return clientKey(x)===k}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)})}
 function ownReview(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-REVM):'')}
 function secReview(x){return x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-REVM):'')}
 function reviewItems(c){var d=ownReview(c);return d?[{date:d,addr:'',lender:'',fixedUntil:c.fixedUntil||'',sec:false}]:[]}
@@ -274,7 +280,7 @@ function pipelineHTML(){
       var ne=nextEvent(c),next=STAGES[i+1];
       h+='<div class="card" draggable="true" tabindex="0" role="button" data-open="'+c.id+'">'+
         '<div class="nm">'+esc(names(c))+cno(c)+'</div>'+
-        '<div class="ad">'+esc(short(c.propertyAddress)||c.type||'')+'</div>'+
+        '<div class="ad">'+esc(short(c.propertyAddress)||c.type||'')+propTag(c)+'</div>'+
         '<div class="row"><span class="num">'+money(c.loanAmount)+'</span><span class="muted">'+esc(c.lender||'')+'</span></div>'+
         (ne?'<div><span class="chip '+tone(ne.date)+'">'+esc(ne.label.split('.')[0])+' · '+rel(ne.date)+'</span></div>':'')+
         (next?'<button class="btn ghost sm go" data-adv="'+c.id+'" data-to="'+next.id+'">Move to '+next.label+' →</button>':'')+
@@ -299,13 +305,18 @@ function casesHTML(){
   if(!cases.length)return h+emptyHTML();
   h+='<div class="tw"><table><thead><tr><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="muted">No cases match.</td></tr>';
-  list.forEach(function(c){
+  var grp={};list.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});var done={};
+  list.forEach(function(c0){
+    var k0=clientKey(c0),g=grp[k0];if(done[k0])return;done[k0]=1;
+    if(g.length>1)h+='<tr class="cg"><td colspan="8"><b>'+esc(names(c0))+'</b> <span class="muted">· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
+    g.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
-    h+='<tr class="click" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+'</div></td>'+
+    h+='<tr class="click'+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
       (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
       (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
       (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
       (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
+    });
   });
   return h+'</tbody></table></div>';
 }
@@ -355,10 +366,24 @@ function plinks(p){
 }
 var secCollapsed={};
 function secSumText(x){var rv=x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-REVM):'');var parts=[x.lender,x.rate?x.rate+'%':'',rv?'Review '+fd(rv):''].filter(Boolean);return parts.join(' · ')||'No lender details yet'}
+var PROP_USES=[['','Choose…'],['btl','Buy to let'],['second','Second home'],['holiday','Holiday home'],['other','Other']];
+function propsFs(c,id){
+  var me=id?cases.filter(function(x){return x.id===id})[0]:null,list=me?sameClient(me):[],old=(c.securities||[]).filter(function(s){return s.address});
+  var h='<fieldset class="secfs propfs"><legend>Properties for this client</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Every property this client owns is its own record with its own lender, rate end date, stage and tasks. Clients are matched on name and date of birth; a joint case with someone else is a separate client.</p>';
+  if(!me)h+='<p class="muted">Save this record first, then you can add further properties for the same client.</p>';
+  else{
+    h+='<div class="proplist">'+list.map(function(x){var cur=x.id===id;return '<div class="propi'+(cur?' cur':'')+'"><div><b>'+(propLabel(x.propUse)||'Property')+'</b>'+(cur?' <span class="muted">(this record)</span>':'')+' <span class="cno">'+esc(x.clientNo||'')+'</span><div>'+esc(short(x.propertyAddress)||'No address yet')+'</div><div class="muted" style="font-size:12px">'+[x.lender,STAGE_LABEL[x.stage]||x.stage,x.fixedUntil?'rate ends '+fd(x.fixedUntil):'',reviewOf(x)?'review '+fd(reviewOf(x)):''].filter(Boolean).join(' · ')+'</div></div>'+(cur?'':'<button type="button" class="btn ghost sm" data-open="'+x.id+'">Open</button>')+'</div>'}).join('')+'</div>';
+    if(old.length)h+='<div class="propold"><b>Addresses noted earlier (not yet their own record)</b>'+old.map(function(s){return '<div class="propi"><div>'+(propUse(s.use)?'<b>'+esc(propUse(s.use))+'</b> ':'')+esc(short(s.address))+'</div><span><button type="button" class="btn sm" data-secprop="'+esc(s.id)+'">Add as property</button><button type="button" class="btn ghost sm" data-rmsec="'+esc(s.id)+'">Remove</button></span></div>'}).join('')+'</div>';
+    h+='<div class="add propadd"><label class="f">New property type<select id="addPropUse">'+PROP_TYPES.map(function(o){return '<option value="'+o[0]+'">'+(o[0]?o[1]:'Choose type…')+'</option>'}).join('')+'</select></label><button type="button" class="btn" id="addProp">Add new property</button></div>';
+  }
+  return h+'<div id="secs" hidden>'+(c.securities||[]).map(secRow).join('')+'</div></fieldset>';
+}
+function propUse(v){var u=PROP_USES.filter(function(q){return q[0]===v})[0];return u&&u[0]?u[1]:''}
 function secRow(x,i){
   x=x||{};var sid=x.id||('s'+Math.random().toString(36).slice(2,9));
-  return '<div class="sec2" data-sid="'+sid+'"><div class="top2"><span>Security address '+(i+1)+'</span><span><button type="button" class="btn ghost sm" data-rmsec="'+sid+'">Remove</button></span></div>'+
-   '<div class="grid"><label class="f wide">Security address<input data-s="address" value="'+esc(x.address)+'" placeholder="House number and street. Then use the postcode search below"></label></div>'+
+  return '<div class="sec2" data-sid="'+sid+'"><div class="top2"><span>Other property '+(i+1)+'</span><span><button type="button" class="btn ghost sm" data-rmsec="'+sid+'">Remove</button></span></div>'+
+   '<div class="grid"><label class="f">Property type<select data-s="use">'+PROP_USES.map(function(u){return '<option value="'+u[0]+'"'+((x.use||'')===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
+   '<label class="f wide">Property address<input data-s="address" value="'+esc(x.address)+'" placeholder="House number and street. Then use the postcode search below"></label></div>'+
    '<div class="pcbar"><input data-pc type="text" placeholder="UK postcode, e.g. B19 1AA" aria-label="Postcode search" autocomplete="off"><button type="button" class="btn ghost sm" data-pcfind>Find postcode</button><span class="pcres muted"></span></div></div>';
 }
 function ukPc(s){s=String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(s.length<5||s.length>7)return '';return s.slice(0,-3)+' '+s.slice(-3)}
@@ -386,7 +411,15 @@ function appRow(a,i){
    '<label class="f">Date of birth<input data-a="dob" type="date" value="'+esc(a.dob)+'"></label>'+
    '<label class="f">Phone<input data-a="phone" type="tel" value="'+esc(a.phone)+'"><span class="pl">'+plinks(a.phone)+'</span></label>'+
    '<label class="f">Email<input data-a="email" type="email" value="'+esc(a.email)+'"><span class="pl el">'+elinks(a.email)+'</span></label>'+
-   '<label class="f wide">Current address<input data-a="address" value="'+esc(a.address)+'"></label></div></div>';
+   '<label class="f wide">Current address<input data-a="address" value="'+esc(a.address)+'"></label>'+
+   '<label class="f">Do you have a mortgage on this address?<select data-a="resMort"><option value=""'+(!a.resMort?' selected':'')+'>Not asked</option><option value="no"'+(a.resMort==='no'?' selected':'')+'>No</option><option value="yes"'+(a.resMort==='yes'?' selected':'')+'>Yes</option></select></label></div>'+
+   '<div class="grid resm"'+(a.resMort==='yes'?'':' hidden')+'>'+
+   '<label class="f">Current lender<input data-a="resLender" value="'+esc(a.resLender)+'"></label>'+
+   '<label class="f">Mortgage type<select data-a="resType">'+[['','Choose…'],['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']].map(function(u){return '<option value="'+u[0]+'"'+((a.resType||'')===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
+   '<label class="f">Current deal ends<input data-a="resDealEnd" type="date" value="'+esc(a.resDealEnd)+'"></label>'+
+   '<label class="f">Approx. balance (£)<input data-a="resBalance" type="number" min="0" step="1" value="'+esc(a.resBalance)+'"></label>'+
+   '<label class="f">Owned by<select data-a="resOwn">'+[['','Choose…'],['sole','Sole name'],['joint','Joint names']].map(function(u){return '<option value="'+u[0]+'"'+((a.resOwn||'')===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
+   '</div></div>';
 }
 var pendingNotes=[];
 function pickClient(){
@@ -394,31 +427,35 @@ function pickClient(){
   if(!list.length)return '';
   return '<label class="f" style="margin-bottom:12px">Start from an existing client (copies their details)<select id="fromClient"><option value="">Choose a client, or leave blank for a new one</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(names(x)+(x.clientNo?' ('+x.clientNo+')':''))+'</option>'}).join('')+'</select></label>';
 }
-function startFrom(src){
+var pendingSecMove=null;
+function startFrom(src,use,addr,secId){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
-  var d={stage:'dip',type:'Purchase',repayment:'repayment',applicants:ap,oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'New case for an existing client: another property for '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+'.'}]};
+  var d={stage:'dip',type:use==='btl'?'Buy to let':'Purchase',repayment:'repayment',applicants:ap,propUse:use||'',propertyAddress:addr||'',oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'Another property for the same client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+(propLabel(use)?' · '+propLabel(use):'')+'.'}]};
+  pendingSecMove=secId?{cid:src.id,sid:secId}:null;
   closeDrawer();openDrawer(null,d);
 }
+function secMoveDone(){var m=pendingSecMove;pendingSecMove=null;if(!m)return;var sc=cases.filter(function(x){return x.id===m.cid})[0];if(sc&&(sc.securities||[]).some(function(s){return s.id===m.sid}))patch(sc.id,{securities:sc.securities.filter(function(s){return s.id!==m.sid})})}
 function openDrawer(id,draft){
-  openId=id;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;editTk=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
+  openId=id;noteSug=null;ntDraft='';notesAll=false;prDraft='';protAll=false;editNote=null;editTk=null;ntTable=null;prTable=null;pendingNotes=(draft&&draft.notes)||[];
   var c=id?cases.filter(function(x){return x.id===id})[0]:null;
   if(id&&!c){openId=undefined;return}
   c=c||Object.assign({stage:'dip',type:'Purchase',repayment:'repayment',applicants:[{}]},draft||{});
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
-  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New case for an existing client. Add the new property details, then it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2></div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
+  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New property for an existing client. Add the property and mortgage details; it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2></div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
-  '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property">New case for this client</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
+  '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property record">Add new property</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
    (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
-   '<fieldset class="secfs"><legend>Security addresses (buy to let and other properties)</legend><p class="muted" style="font-size:12px;margin:0 0 8px">Add the address of each property the mortgage is secured on.</p><div id="secs">'+(c.securities||[]).map(secRow).join('')+'</div><button type="button" class="btn ghost sm" id="addSec">Add security address</button></fieldset>'+
+   propsFs(c,id)+
    secFs('lender','Lender')+
+     sel('propUse','Property type',c.propUse,PROP_TYPES)+
      fld('lender','Lender name',c.lender)+
      sel('stage','Stage',c.stage,stageOpts(c.stage))+
      sel('type','Type',c.type,TYPES.map(function(t){return [t,t]}))+
      sel('repayment','Repayment method',c.repayment,[['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']])+
-     fld('propertyAddress','Property address',c.propertyAddress,'text',{wide:1})+
+     fld('propertyAddress','Property address (Security Address)',c.propertyAddress,'text',{wide:1})+
      fld('purchasePrice','Purchase price',c.purchasePrice,'number',{gbp:1})+
      fld('propertyValue','Valuation',c.propertyValue,'number',{gbp:1})+
      fld('loanAmount','Loan amount',c.loanAmount,'number',{gbp:1})+
@@ -475,8 +512,8 @@ function apHTML(home){
   h+='<div class="aphead"><h2>'+first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</h2><button type="button" class="btn ghost sm" data-apmonth="-1" aria-label="Previous month">‹ Prev</button><button type="button" class="btn ghost sm" data-apmonth="0">Today</button><button type="button" class="btn ghost sm" data-apmonth="1" aria-label="Next month">Next ›</button><button type="button" class="btn" data-apnew="1" style="margin-left:auto">Book appointment</button></div>';
   h+='<div class="apgrid">'+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(d){return '<div class="apdow">'+d+'</div>'}).join('');
   for(var i=0;i<42;i++){
-    var d=new Date(y,mo,1-off+i),di=iso(d),l=apSorted(by[di]||[]);
-    h+='<button type="button" class="apcell'+(d.getMonth()!==mo?' out':'')+(di===tIso?' today':'')+(di===apSel?' sel':'')+'" data-apday="'+di+'" aria-label="'+di+(l.length?', '+l.length+' appointments':'')+'"><span class="apn">'+d.getDate()+'</span>'+
+    var d=new Date(y,mo,1-off+i),di=iso(d),l=apSorted(by[di]||[]),tk=tasksOn(di);
+    h+='<button type="button" class="apcell'+(d.getMonth()!==mo?' out':'')+(di===tIso?' today':'')+(di===apSel?' sel':'')+'" data-apday="'+di+'" aria-label="'+di+(l.length?', '+l.length+' appointments':'')+(tk.length?', '+tk.length+' tasks due':'')+'"><span class="apn">'+d.getDate()+'</span>'+(tk.length?'<span class="aptkn" title="'+tk.length+' task'+(tk.length===1?'':'s')+' due">'+tk.length+' task'+(tk.length===1?'':'s')+'</span>':'')+
       l.slice(0,3).map(function(a){var late=(a.status||'booked')==='booked'&&di<tIso;return '<span class="apchip'+(a.status==='done'?' done':'')+(a.status==='noshow'?' miss':'')+(late?' late':'')+'" data-apdrag="'+a.id+'"'+(late?' title="Past appointment still marked Booked. Open the day to update it."':' title="Drag to another day to move it"')+'>'+esc(a.time)+' '+esc(apWho(a))+'</span>'}).join('')+(l.length>3?'<span class="apmore">+'+(l.length-3)+' more</span>':'')+
       (l.length?'<span class="apdots">'+l.slice(0,6).map(function(){return '<span class="apdot"></span>'}).join('')+'</span>':'')+'</button>';
   }
@@ -484,6 +521,7 @@ function apHTML(home){
   var day=apSorted(appts.filter(function(a){return a.date===apSel}));
   h+='<div class="aphead"><h2>'+new Date(apSel+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+'</h2><button type="button" class="btn ghost sm" data-apnew="1">Book on this day</button></div>';
   h+=day.length?day.map(function(a){return apCard(a,false)}).join(''):'<div class="muted" style="margin-bottom:10px">Nothing booked on this day.</div>';
+  var dtk=tasksOn(apSel);if(dtk.length)h+='<div class="aptks"><b>Tasks due this day</b>'+dtk.map(function(x){return '<div class="aptk'+(x.t.pri?' pri':'')+'">'+(x.t.time?'<span class="aptkt">'+esc(x.t.time)+'</span>':'')+'<span>'+esc(x.t.text)+'</span><button type="button" class="lnk" data-open="'+x.c.id+'">'+esc(names(x.c))+'</button></div>'}).join('')+'</div>';
   var nowMin=new Date().getHours()*60+new Date().getMinutes();
   var up=apSorted(appts.filter(function(a){return (a.status||'booked')==='booked'&&(a.date>tIso||(a.date===tIso&&apMin(a.time)+(+a.dur||30)>=nowMin))})).slice(0,8);
   h+='<div class="aphead" style="margin-top:16px"><h2 style="font-size:15px">Coming up</h2></div>'+(up.length?up.map(function(a){return apCard(a,true)}).join(''):'<div class="muted">No upcoming appointments.</div>');
@@ -510,6 +548,7 @@ function apNextHtml(cid){
   var a=up[0];return 'Next appointment: <b>'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', '+esc(a.time)+'</b>'+(a.mode?' · '+esc(a.mode):'')+(up.length>1?' · +'+(up.length-1)+' more':'');
 }
 function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false;apDpM=null}
+document.addEventListener('change',function(e){var x=e.target;if(x&&x.getAttribute&&x.getAttribute('data-a')==='resMort'){var row=x.closest('.app'),bx=row&&row.querySelector('.resm');if(bx){bx.hidden=x.value!=='yes';if(x.value==='yes'){var f=bx.querySelector('input');if(f)f.focus()}}}});
 document.addEventListener('change',function(e){var x=e.target;if(!x)return;if(x.id==='apDur'){apClash=false;apDpRender()}else if(x.id==='apSlSel'){$('#apTime').value=x.value;apClash=false;apDpRender()}});
 var apDpM=null;
 function apT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
@@ -566,12 +605,84 @@ function apSave(){
   if(!date||!time){msg.textContent='Choose a date and a time.';return}
   var c=apFindCase(wv),ex=apEditId?appts.filter(function(x){return x.id===apEditId})[0]:null,ref=apEditId?apCol.doc(apEditId):apCol.doc(),id=ref.id;
   var d={caseId:c?c.id:'',who:c?names(c):wv,type:$('#apType').value,date:date,time:time,dur:+$('#apDur').value||30,mode:$('#apMode').value,where:$('#apWhere').value.trim(),notes:$('#apNotes').value.trim(),status:apEditId?$('#apStatus').value:'booked',created:(ex&&ex.created)||Date.now(),updatedAt:Date.now()};
+  if(d.status==='noshow'&&(!ex||ex.status!=='noshow')&&d.caseId)setTimeout(function(){apMissTask(d)},400);
   var s0=apMin(time),e0=s0+d.dur,clash=(d.status==='booked')?appts.filter(function(x){return x.id!==id&&x.date===date&&(x.status||'booked')==='booked'&&apMin(x.time)<e0&&apMin(x.time)+(+x.dur||30)>s0}):[];
   if(clash.length&&!apClash){apClash=true;msg.textContent='That overlaps with '+apWho(clash[0])+' at '+clash[0].time+'. Press the button again to book it anyway.';return}
   write('ap-'+id,function(){return apEditId?ref.update(d):ref.set(d)});
   apSel=date;var pd=date.split('-');apMonth={y:+pd[0],m:+pd[1]-1};
   var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
 }
+/* ---------- notes -> suggested tasks / appointments / stage ---------- */
+var noteSug=null;
+var SUG_ACT=/\b(call|ring|phone|chase|chasing|email|send|book|follow(?:\s|-)?up|remind|check|request|submit|arrange|contact|speak to|ask|text|upload|order|instruct|get|obtain|confirm|update|review|visit|meet|meeting|appointment|zoom|teams)\b/i;
+var SUG_MEET=/\b(call|ring|phone|visit|meet|meeting|appointment|zoom|teams|speak to|review meeting|sign)\b/i;
+var SUG_STAGE=[[/\b(offer(ed)?\s+(received|issued|out|came through)|mortgage offer|formal offer)\b/i,'offer'],[/\b(completed|completion (took place|went through|happened)|keys released)\b/i,'completed'],[/\b(fma|full (mortgage )?application|application)\s+(submitted|sent|keyed|in)\b/i,'application'],[/\b(dip|aip|decision in principle|agreement in principle)\s+(agreed|approved|accepted|passed|done|obtained)\b/i,'dip'],[/\bfact(\s|-)?find\s+(done|completed|booked|held)\b/i,'factfind']];
+var SUG_DOW={monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thur:4,thurs:4,friday:5,fri:5,saturday:6,sat:6,sunday:0,sun:0};
+function sugWhen(s){
+  var now=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()),d=null,m,low=s.toLowerCase();
+  if(/\btoday\b|\bthis (morning|afternoon|evening)\b|\btonight\b/.test(low))d=new Date(now);
+  else if(/\btomorrow\b/.test(low)){d=new Date(now);d.setDate(d.getDate()+1)}
+  else if((m=low.match(/\bin (\d+|a|one|two|three|four|five|six)\s*(day|week|month)s?\b/))){var n={a:1,one:1,two:2,three:3,four:4,five:5,six:6}[m[1]]||+m[1];d=new Date(now);if(m[2]==='day')d.setDate(d.getDate()+n);else if(m[2]==='week')d.setDate(d.getDate()+7*n);else d.setMonth(d.getMonth()+n)}
+  else if((m=low.match(/\b(next|this|on|by|before)?\s*(monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b/))){var want=SUG_DOW[m[2]],diff=(want-now.getDay()+7)%7;if(diff===0&&m[1]!=='this')diff=7;if(m[1]==='next'&&diff<7)diff+=0;d=new Date(now);d.setDate(d.getDate()+diff)}
+  else if(/\bnext week\b/.test(low)){d=new Date(now);d.setDate(d.getDate()+((8-now.getDay())%7||7))}
+  else if(/\bend of (the )?month\b/.test(low)){d=new Date(now.getFullYear(),now.getMonth()+1,0)}
+  else if(/\bend of (the )?week\b/.test(low)){d=new Date(now);d.setDate(d.getDate()+((5-now.getDay()+7)%7))}
+  else if((m=low.match(/\b(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?\b/))){var yy=m[3]?(m[3].length===2?2000+ +m[3]:+m[3]):now.getFullYear();var dd=new Date(yy,+m[2]-1,+m[1]);if(!m[3]&&dd<now)dd.setFullYear(yy+1);if(!isNaN(dd))d=dd}
+  else if((m=low.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b(?:\s+(\d{4}))?/))){var mi=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(m[2].slice(0,3));var d2=new Date(m[3]?+m[3]:now.getFullYear(),mi,+m[1]);if(!m[3]&&d2<now)d2.setFullYear(d2.getFullYear()+1);d=d2}
+  var time='';if((m=low.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b/))){var hh=+m[1]%12+(m[3]==='pm'?12:0);time=('0'+hh).slice(-2)+':'+(m[2]||'00')}
+  else if((m=low.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)))time=('0'+m[1]).slice(-2)+':'+m[2];
+  else if((m=low.match(/\bat (\d{1,2})\b/))&&+m[1]>=7&&+m[1]<=20)time=('0'+m[1]).slice(-2)+':00';
+  if(time&&!d)d=new Date(now);
+  return {date:d?iso(d):'',time:time};
+}
+function sugClean(s){s=s.replace(/^\s*[-*•\d.)]+\s*/,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'');if(s.length>90)s=s.slice(0,87).replace(/\s\S*$/,'')+'…';return s.charAt(0).toUpperCase()+s.slice(1)}
+function noteSuggest(text,c){
+  var out=[],seen={},existing=(c&&c.tasks||[]).filter(function(x){return !x.done}).map(function(x){return x.text.toLowerCase()});
+  var parts=text.split(/[.!?]+\s+|\n+|;\s+/).map(function(s){return s.trim()}).filter(Boolean);
+  parts.forEach(function(s){
+    if(out.length>=3)return;
+    var low=s.toLowerCase();
+    if(/\b(has|have|had|was|were|did|done|sent|called|rang|spoke|chased|emailed|received|confirmed|completed|agreed)\b/.test(low)&&!/\b(need|needs|must|should|will|to|remember|remind|next|then|book)\b/.test(low))return;
+    if(!SUG_ACT.test(s))return;
+    var w=sugWhen(s),txt=sugClean(s),k=txt.toLowerCase();
+    if(seen[k]||existing.indexOf(k)>-1)return;seen[k]=1;
+    if(w.time&&SUG_MEET.test(s))out.push({kind:'appt',text:txt,date:w.date,time:w.time});
+    else out.push({kind:'task',text:txt,date:w.date,time:w.time});
+  });
+  var cur=c&&c.stage||'',order=STAGES.map(function(s){return s.id});
+  for(var i=0;i<SUG_STAGE.length;i++){if(SUG_STAGE[i][0].test(text)){var st=SUG_STAGE[i][1];if(st!==cur&&order.indexOf(st)>order.indexOf(cur))out.push({kind:'stage',stage:st,text:'Move stage to '+STAGE_LABEL[st]});break}}
+  return out.length?{items:out.slice(0,4)}:null;
+}
+function sugLabel(x){var fd=function(s){return new Date(s+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})};
+  if(x.kind==='stage')return '<span class="sgk">Stage</span> '+esc(x.text);
+  if(x.kind==='appt')return '<span class="sgk">Appointment</span> '+esc(x.text)+' <span class="muted">· '+fd(x.date)+' '+esc(x.time)+'</span>';
+  return '<span class="sgk">Task</span> '+esc(x.text)+(x.date?' <span class="muted">· due '+fd(x.date)+(x.time?' '+esc(x.time):'')+'</span>':' <span class="muted">· no date found, add one after</span>')}
+function sugHtml(){
+  if(!noteSug||!noteSug.items.length)return '';
+  return '<div id="ntSug" class="ntsug" role="region" aria-label="Suggested from this note"><div class="sgh"><b>Suggested from this note</b><span class="muted"> · nothing is created until you press Add</span><button type="button" class="btn ghost sm" data-sgall="1">Dismiss all</button></div>'+
+    noteSug.items.map(function(x,i){return '<div class="sgi"><span>'+sugLabel(x)+'</span><span class="sgb"><button type="button" class="btn sm" data-sgadd="'+i+'">Add</button><button type="button" class="btn ghost sm" data-sgx="'+i+'">Dismiss</button></span></div>'}).join('')+'</div>';
+}
+function sugApply(i){
+  var x=noteSug&&noteSug.items[i],c=currentCase();if(!x||!c)return;
+  if(x.kind==='task'){patch(openId,{tasks:(c.tasks||[]).concat([{id:uid(),text:x.text,due:x.date||'',time:x.time||'',done:false,created:Date.now(),pri:false,from:'note'}])});toast('Task added')}
+  else if(x.kind==='stage'){var ss=$('#f-stage');if(ss)ss.value=x.stage;patch(openId,{stage:x.stage});toast('Stage set to '+STAGE_LABEL[x.stage])}
+  else if(x.kind==='appt'){apOpen(null,x.date||iso(TODAY),openId);setTimeout(function(){var s=$('#apSlSel');if(s&&x.time){var mm=apMin(x.time),r=Math.round(mm/15)*15,v=apT(r);if([].some.call(s.options,function(o){return o.value===v})){s.value=v;s.dispatchEvent(new Event('change',{bubbles:true}))}}var n=$('#apNotes');if(n&&!n.value)n.value=x.text},80)}
+  noteSug.items.splice(i,1);if(!noteSug.items.length)noteSug=null;if(x.kind!=='appt')renderLive();else{var b=$('#ntSug');if(b)b.outerHTML=sugHtml()}
+}
+document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;
+  var ad=t.closest('[data-sgadd]');if(ad){sugApply(+ad.getAttribute('data-sgadd'));return}
+  var dx=t.closest('[data-sgx]');if(dx){if(noteSug){noteSug.items.splice(+dx.getAttribute('data-sgx'),1);if(!noteSug.items.length)noteSug=null}var b=$('#ntSug');if(b)b.outerHTML=sugHtml();return}
+  if(t.closest('[data-sgall]')){noteSug=null;var b2=$('#ntSug');if(b2)b2.remove();return}
+});
+/* missed appointment -> rebook task on the case */
+function apMissTask(a){
+  var c=a&&a.caseId&&cases.filter(function(x){return x.id===a.caseId})[0];if(!c)return false;
+  var txt='Rebook missed '+(a.type||'appointment').toLowerCase()+' from '+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  if((c.tasks||[]).some(function(x){return !x.done&&x.text.toLowerCase()===txt.toLowerCase()}))return false;
+  patch(c.id,{tasks:(c.tasks||[]).concat([{id:uid(),text:txt,due:iso(TODAY),time:'',done:false,created:Date.now(),pri:true,from:'missed'}])});return true;
+}
+/* tasks due on a day, for the calendar */
+function tasksOn(di){var out=[];cases.forEach(function(c){(c.tasks||[]).forEach(function(x){if(!x.done&&x.due===di)out.push({c:c,t:x})})});out.sort(function(a,b){return (a.t.time||'99')<(b.t.time||'99')?-1:1});return out}
 /* ---------- drag an appointment to another day / time ---------- */
 var apDrag=null,apDragUsed=false;
 function apDragGhost(a){var g=document.createElement('div');g.className='apghost';g.textContent=(a.time||'')+' '+apWho(a);document.body.appendChild(g);return g}
@@ -1095,7 +1206,7 @@ function renderLive(){
     '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="tkPri"> High priority</label><button type="button" class="btn ghost" id="tkAdd">Add task</button><button type="button" class="btn" id="tkBook">Book appointment</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<div style="margin-bottom:14px">'+tasksHtml+'</div><fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
-    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div class="muted" style="font-size:12px;margin:-4px 0 8px">Do not type NI numbers, bank details, passport numbers, income and expenditure, or health answers here.</div><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+
+    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div class="muted" style="font-size:12px;margin:-4px 0 8px">Do not type NI numbers, bank details, passport numbers, income and expenditure, or health answers here.</div><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+sugHtml()+
     (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset>';
   decorateSecs();
 }
@@ -1124,7 +1235,7 @@ function collectForm(){
     var sid0=card.getAttribute('data-sid'),old0=((currentCase()||{}).securities||[]).filter(function(q){return q.id===sid0})[0]||{};var x=Object.assign({},old0,{id:sid0});
     card.querySelectorAll('[data-s]').forEach(function(i){var k=i.getAttribute('data-s');x[k]=i.type==='number'?num(i.value):i.value.trim()});
     var a2=x.fixedUntil?addMonths(x.fixedUntil,-REVM):'';if(x.reviewDate===a2)x.reviewDate='';
-    var has=['address','lender','lenderRef','product','fixedUntil','reviewDate','erc','mortgageExpiry','rate','followOnRate','monthlyPayment','loanAmount'].some(function(k){return x[k]});
+    var has=['address','use','lender','lenderRef','product','fixedUntil','reviewDate','erc','mortgageExpiry','rate','followOnRate','monthlyPayment','loanAmount'].some(function(k){return x[k]});
     if(has)o.securities.push(x);
   });
   o.links=curLinks.map(function(l){return {id:l.id,cid:l.cid,rel:l.rel}});
@@ -1139,7 +1250,7 @@ function saveCase(){
   else{
     if(!data.clientNo)data.clientNo=nextClientNo();
     var ref=col.doc();data.createdAt=Date.now();data.updatedAt=data.createdAt;data.tasks=[];data.notes=pendingNotes;
-    p=write(ref.id,function(){return ref.set(data)}).then(function(){openId=ref.id});
+    p=write(ref.id,function(){return ref.set(data)}).then(function(){openId=ref.id;secMoveDone()});
   }
   p.then(function(){toast('Case saved');closeDrawer()});
 }
@@ -1417,7 +1528,7 @@ document.addEventListener('click',function(e){
   var pcb=t.closest&&t.closest('[data-pcfind]');if(pcb){pcFind(pcb);return}
   if(t.id==='addSec'){var sn=document.querySelectorAll('#secs .sec2').length;$('#secs').insertAdjacentHTML('beforeend',secRow({},sn));var na=$('#secs .sec2:last-child [data-s="address"]');if(na)na.focus();return}
   var rms=t.closest('[data-rmsec]');
-  if(rms){var cd=rms.closest('.sec2');cd.remove();document.querySelectorAll('#secs .sec2').forEach(function(c2,j){var h=c2.querySelector('.top2>span');if(h)h.textContent='Security address '+(j+1)});updSRev();return}
+  if(rms){var cd=rms.closest('.sec2');if(!cd){var sidr=rms.getAttribute('data-rmsec');cd=document.querySelector('#secs .sec2[data-sid="'+sidr+'"]');var pr=rms.closest('.propi');if(pr)pr.remove()}if(cd)cd.remove();document.querySelectorAll('#secs .sec2').forEach(function(c2,j){var h=c2.querySelector('.top2>span');if(h)h.textContent='Other property '+(j+1)});updSRev();return}
   var sg=t.closest('[data-sectog]');
   if(sg){var cd2=sg.closest('.sec2'),isC=cd2.classList.toggle('sec2-collapsed');secCollapsed[cd2.getAttribute('data-sid')]=isC;sg.textContent=isC?'Show lender details':'Hide lender details';return}
   var rm=t.closest('[data-rmapp]');
@@ -1473,7 +1584,7 @@ document.addEventListener('click',function(e){
   var ape=t.closest&&t.closest('[data-apedit]');if(ape){apOpen(ape.getAttribute('data-apedit'));return}
   var apk=t.closest&&t.closest('[data-apdone]');
   var apm2=t.closest&&t.closest('[data-apmiss]');
-  if(apm2){var mk0=apm2.getAttribute('data-apmiss');write('ap-'+mk0,function(){return apCol.doc(mk0).update({status:'noshow',updatedAt:Date.now()})});toast('Marked as missed');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);return}
+  if(apm2){var mk0=apm2.getAttribute('data-apmiss'),ma0=appts.filter(function(x){return x.id===mk0})[0];write('ap-'+mk0,function(){return apCol.doc(mk0).update({status:'noshow',updatedAt:Date.now()})});toast('Marked as missed'+(ma0&&apMissTask(ma0)?'. Rebook task added':''));setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);return}
   var apr=t.closest&&t.closest('[data-aprebook]');
   if(apr){var ra=appts.filter(function(x){return x.id===apr.getAttribute('data-aprebook')})[0];if(ra){apOpen(null,iso(TODAY),ra.caseId||null);setTimeout(function(){var ty=$('#apType'),md=$('#apMode'),dr=$('#apDur');if(ty&&ra.type)ty.value=ra.type;if(md&&ra.mode)md.value=ra.mode;if(dr&&ra.dur)dr.value=ra.dur;apDpRender()},60)}return}
   if(apk){var ak=apk.getAttribute('data-apdone'),aa=appts.filter(function(x){return x.id===ak})[0];if(aa){write('ap-'+ak,function(){return apCol.doc(ak).update({status:aa.status==='done'?'booked':'done',updatedAt:Date.now()})});setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
@@ -1527,6 +1638,8 @@ document.addEventListener('click',function(e){
     commitTbl(info,rws);return;
   }
   if(t.id==='dupBtn'){var sc=cases.filter(function(x){return x.id===openId})[0];if(sc){autoSave();startFrom(sc)}return}
+  if(t.id==='addProp'){var sc2=cases.filter(function(x){return x.id===openId})[0],u2=$('#addPropUse')?$('#addPropUse').value:'';if(sc2){autoSave();startFrom(sc2,u2)}return}
+  var spb=t.closest&&t.closest('[data-secprop]');if(spb){var sc3=cases.filter(function(x){return x.id===openId})[0],sid3=spb.getAttribute('data-secprop'),s3=sc3&&(sc3.securities||[]).filter(function(s){return s.id===sid3})[0];if(sc3&&s3){autoSave();startFrom(sc3,{btl:'btl',second:'second',holiday:'holiday'}[s3.use]||'',s3.address,sid3)}return}
   if(t.id==='delBtn'){
     if(!t.classList.contains('armed')){t.classList.add('armed');t.textContent='Confirm delete';return}
     var id=openId;closeDrawer();write(id,function(){return col.doc(id).delete()}).then(function(){toast('Case deleted')});return;
@@ -1554,7 +1667,7 @@ document.addEventListener('click',function(e){
   }
   if(t.id==='ntAdd'){
     var nt=$('#ntText').value.trim();if(!nt&&!ntTable)return;ntDraft='';
-    var c4=currentCase();lastND='';var nn={ts:Date.now(),text:nt};if(ntTable){nn.table={rows:ntTable.rows};ntTable=null}patch(openId,{notes:(c4.notes||[]).concat([nn]),noteDraft:''});return;
+    var c4=currentCase();lastND='';var nn={ts:Date.now(),text:nt};if(ntTable){nn.table={rows:ntTable.rows};ntTable=null}noteSug=nt?noteSuggest(nt,c4):null;patch(openId,{notes:(c4.notes||[]).concat([nn]),noteDraft:''});return;
   }
 });
 document.addEventListener('change',function(e){
@@ -1725,7 +1838,7 @@ function autoSave(){
         if(!nd.clientNo)nd.clientNo=nextClientNo();
         var nref=col.doc();nd.createdAt=Date.now();nd.updatedAt=nd.createdAt;nd.tasks=[];nd.notes=pendingNotes;
         write(nref.id,function(){return nref.set(nd)}).then(function(){
-          creatingNew=false;
+          creatingNew=false;secMoveDone();
           if(!openId&&dn&&!dn.hidden&&$('#caseForm')){openId=nref.id;var cf=$('#f-clientNo');if(cf&&!cf.value)cf.value=nd.clientNo;lastAuto=JSON.stringify(collectForm());var m=$('#autoMsg');if(m)m.textContent='Auto-saved '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
         },function(){creatingNew=false});
       }
