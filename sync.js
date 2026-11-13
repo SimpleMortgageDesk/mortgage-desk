@@ -399,10 +399,12 @@
     items.forEach(function (it) {
       if (it.pb) { if (pages[pages.length - 1].length) newPage(); return; }
       var sz = it.sz || 9, lh = Math.round(sz * 1.38 * 10) / 10, ind = it.ind || 0;
-      var max = Math.floor((W - 2 * ML - ind) / (sz * (it.b ? 0.58 : 0.53)));
+      if (it.rule) { if (y - 6 < BOT) newPage(); pages[pages.length - 1].push({ rule: 1, y: y + lh * 0.45 }); y -= 6 + (it.gap || 0); return; }
+      var max = Math.floor((W - 2 * ML - ind - (it.amt ? 120 : 0)) / (sz * (it.b ? 0.58 : 0.53)));
       pdfWrap(it.t, max).forEach(function (ln, k) {
         if (y - lh < BOT) newPage();
         pages[pages.length - 1].push({ t: ln, x: ML + ind + (k && it.hang ? it.hang : 0), y: y, b: it.b, sz: sz });
+        if (!k && it.amt != null) { var as = it.amtSz || sz, aw = String(it.amt).length * as * (it.amtB ? 0.58 : 0.53); pages[pages.length - 1].push({ t: String(it.amt), x: W - ML - aw, y: y, b: it.amtB, sz: as }); }
         y -= lh;
       });
       y -= it.gap || 0;
@@ -416,7 +418,7 @@
     obj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
     pages.forEach(function (p, i) {
       var cs = '';
-      p.forEach(function (l) { cs += 'BT /' + (l.b ? 'F2' : 'F1') + ' ' + l.sz + ' Tf 1 0 0 1 ' + l.x + ' ' + l.y.toFixed(1) + ' Tm (' + pdfStr(l.t) + ') Tj ET\n'; });
+      p.forEach(function (l) { if (l.rule) { cs += '0.6 w ' + ML + ' ' + l.y.toFixed(1) + ' m ' + (W - ML) + ' ' + l.y.toFixed(1) + ' l S\n'; return; } cs += 'BT /' + (l.b ? 'F2' : 'F1') + ' ' + l.sz + ' Tf 1 0 0 1 ' + l.x.toFixed(1) + ' ' + l.y.toFixed(1) + ' Tm (' + pdfStr(l.t) + ') Tj ET\n'; });
       cs += 'BT /F1 8 Tf 1 0 0 1 ' + ML + ' 30 Tm (' + pdfStr(footer + '  |  page ' + (i + 1) + ' of ' + n) + ') Tj ET\n';
       obj(5 + 2 * i, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + W + ' ' + H + '] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' + (6 + 2 * i) + ' 0 R >>');
       if (enc) { var eb = pdfObjEnc(enc, 6 + 2 * i, strB(cs)), es = ''; for (var q = 0; q < eb.length; q++) es += String.fromCharCode(eb[q]); cs = es; }
@@ -755,6 +757,83 @@
       }
     });
   }
+  /* ---------- invoices: your own payment details (this device) and the invoice PDF ---------- */
+  function invGet() { try { return JSON.parse(ls('md.inv') || '{}') || {}; } catch (e) { return {}; } }
+  function invSet(o) { lset('md.inv', JSON.stringify(o)); }
+  function sortFmt(s) { s = String(s || '').replace(/\D/g, '').slice(0, 6); return s.length === 6 ? s.slice(0, 2) + '-' + s.slice(2, 4) + '-' + s.slice(4) : s; }
+  function openInvoiceSettings() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+    var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;margin:4px 0 10px';
+    function draw(msg) {
+      var v = invGet(), lk = !!(v.payee || v.sort || v.acct) && !reFresh(), dis = lk ? ' disabled' : '';
+      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Invoice details</h2><button class="btn ghost" data-p="close">Close</button></div>' +
+        '<p style="margin:12px 0;color:#58697A;font-size:13px">Your own business payment details, printed on every invoice. They stay on this device, like your profile. Your name, business name, mobile and email come from My profile.</p>' +
+        (lk ? '<p style="margin:0 0 10px;padding:8px 10px;background:#FFF6DD;border-radius:8px;font-size:13px">These details are locked. To change them, confirm with your Microsoft account password. <button class="btn ghost sm" data-p="unlock">Unlock</button></p>' : '') +
+        '<label>Account name (payee)</label><input id="ivPayee"' + dis + ' type="text" maxlength="80" value="' + esc(v.payee || '') + '" style="' + inp + '">' +
+        '<div style="display:flex;gap:10px"><div style="flex:1"><label>Sort code</label><input id="ivSort"' + dis + ' type="text" inputmode="numeric" maxlength="8" placeholder="60-83-71" value="' + esc(v.sort || '') + '" style="' + inp + '"></div><div style="flex:1"><label>Account number</label><input id="ivAcct"' + dis + ' type="text" inputmode="numeric" maxlength="8" value="' + esc(v.acct || '') + '" style="' + inp + '"></div></div>' +
+        '<label>Business address (optional, shown at the top)</label><textarea id="ivAddr"' + dis + ' rows="3" maxlength="300" style="' + inp + '">' + esc(v.addr || '') + '</textarea>' +
+        '<div style="display:flex;gap:10px"><div style="flex:1"><label>Next invoice number</label><input id="ivNext"' + dis + ' type="number" min="1" step="1" value="' + esc(v.next || 1) + '" style="' + inp + '"></div><div style="flex:1"><label>Payment terms (days)</label><input id="ivDays"' + dis + ' type="number" min="0" step="1" value="' + esc(v.days == null ? 7 : v.days) + '" style="' + inp + '"></div></div>' +
+        '<label>Note at the foot of the invoice (optional)</label><textarea id="ivNote"' + dis + ' rows="2" maxlength="300" style="' + inp + '">' + esc(v.note == null ? 'Please quote the invoice number as the payment reference.' : v.note) + '</textarea>' +
+        '<button class="btn" data-p="save"' + dis + '>Save invoice details</button><p id="ivMsg" style="min-height:18px;margin:10px 0 0">' + esc(msg || '') + '</p></div>';
+    }
+    draw();
+    var say = function (m) { var e = $('ivMsg'); if (e) e.textContent = m; };
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+    ov.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-p]'); if (!b) return; b = b.getAttribute('data-p');
+      var v = invGet();
+      if (b === 'close') ov.remove();
+      else if (b === 'unlock') reGate('invoice');
+      else if (b === 'save') {
+        if ((v.payee || v.sort || v.acct) && !reGate('invoice')) return;
+        var sc = sortFmt(($('ivSort') || {}).value), ac = String(($('ivAcct') || {}).value || '').replace(/\D/g, '');
+        if (sc && sc.length !== 8) { say('The sort code needs 6 digits.'); return; }
+        if (ac && ac.length !== 8) { say('The account number needs 8 digits.'); return; }
+        invSet({ payee: (($('ivPayee') || {}).value || '').trim(), sort: sc, acct: ac, addr: (($('ivAddr') || {}).value || '').trim(), next: Math.max(1, parseInt(($('ivNext') || {}).value, 10) || 1), days: Math.max(0, parseInt(($('ivDays') || {}).value, 10) || 0), note: (($('ivNote') || {}).value || '').trim() });
+        draw('Saved. These details are now locked.');
+      }
+    });
+  }
+  function invPdfBytes(inv) {
+    var f = inv.from || {}, it = [], gbp = function (n) { n = +n || 0; return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var dmy = function (s) { if (!s) return ''; var d = new Date(s + 'T00:00:00'); return isNaN(d) ? s : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+    it.push({ t: f.biz || f.name || 'Invoice', b: 1, sz: 16, amt: 'INVOICE', amtB: 1, amtSz: 20, gap: 2 });
+    if (f.biz && f.name) it.push({ t: f.name, sz: 10 });
+    (f.addr || '').split(/\n/).filter(Boolean).forEach(function (l) { it.push({ t: l, sz: 9 }); });
+    if (f.phone) it.push({ t: f.phone, sz: 9 });
+    if (f.email) it.push({ t: f.email, sz: 9 });
+    it.push({ t: '', gap: 10 });
+    it.push({ t: 'Invoice number: ' + (inv.no || ''), b: 1, sz: 11, amt: 'Date: ' + dmy(inv.date), amtB: 1, amtSz: 11, gap: 14 });
+    it.push({ t: 'BILL TO', b: 1, sz: 9, gap: 1 });
+    (inv.to || '').split(/\n/).filter(Boolean).forEach(function (l) { it.push({ t: l, sz: 11 }); });
+    if (inv.re) { it.push({ t: '', gap: 6 }); it.push({ t: 'Regarding: ' + inv.re, sz: 10 }); }
+    it.push({ t: '', gap: 16 });
+    it.push({ rule: 1 }); it.push({ t: 'DESCRIPTION', b: 1, sz: 10, amt: 'AMOUNT', amtB: 1, amtSz: 10 }); it.push({ rule: 1, gap: 4 });
+    (inv.lines && inv.lines.length ? inv.lines : [{ desc: inv.desc, amount: inv.amount }]).forEach(function (l) { it.push({ t: l.desc || '', sz: 11, amt: gbp(l.amount), amtSz: 11, gap: 4 }); });
+    it.push({ t: '', gap: 6 }); it.push({ rule: 1 });
+    it.push({ t: 'TOTAL', b: 1, sz: 12, amt: gbp(inv.total != null ? inv.total : inv.amount), amtB: 1, amtSz: 12 }); it.push({ rule: 1, gap: 18 });
+    it.push({ t: 'PAYMENT DETAILS', b: 1, sz: 9, gap: 2 });
+    it.push({ t: 'Please pay by bank transfer to:', sz: 10, gap: 2 });
+    if (inv.payee) it.push({ t: 'Account name:  ' + inv.payee, sz: 10 });
+    if (inv.sort) it.push({ t: 'Sort code:  ' + inv.sort, sz: 10 });
+    if (inv.acct) it.push({ t: 'Account number:  ' + inv.acct, sz: 10 });
+    it.push({ t: 'Payment reference:  Invoice ' + (inv.no || ''), sz: 10, gap: 8 });
+    if (inv.dueDate) it.push({ t: 'Please make payment within ' + inv.days + ' day' + (inv.days === 1 ? '' : 's') + ', by ' + dmy(inv.dueDate) + '.', sz: 10, gap: 6 });
+    if (inv.note) it.push({ t: inv.note, sz: 10, gap: 6 });
+    it.push({ t: 'If you have any questions about this invoice, please contact me' + (f.phone ? ' on ' + f.phone : '') + (f.email ? (f.phone ? ' or ' : ' at ') + f.email : '') + '.', sz: 10, gap: 14 });
+    it.push({ t: 'THANK YOU', b: 1, sz: 11 });
+    return pdfBuild(it, (f.biz || f.name || 'Invoice') + '  |  Invoice ' + (inv.no || ''));
+  }
+  window.mdInvoice = {
+    get: invGet,
+    settings: openInvoiceSettings,
+    bump: function (no) { var v = invGet(), n = parseInt(no, 10); if (!isNaN(n) && n >= (v.next || 1)) { v.next = n + 1; invSet(v); } },
+    download: function (inv, filename) { return saveFile({ filename: filename, data: invPdfBytes(inv) }); },
+    bytes: invPdfBytes
+  };
   async function openBackup() {
     ['md.bkq', 'md.bkrec', 'md.bkhint', 'md.bkwa'].forEach(function (k) { if (k !== 'md.bkwa' || profGet().phone) lset(k, null); });
     var ov = document.createElement('div');
@@ -880,6 +959,7 @@
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">My profile</h3><p style="margin:0 0 8px;color:#58697A">' + (profGet().name ? esc(profGet().name) + (profGet().biz ? ' &middot; ' + esc(profGet().biz) : '') : 'Add your name, business, mobile number and email.') + '</p><button class="btn" data-a="profile">' + (profGet().name || profGet().phone ? 'Edit profile' : 'Set up profile') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Invoices</h3><p style="margin:0 0 8px;color:#58697A">' + (invGet().payee ? 'Paying to ' + esc(invGet().payee) + ', next invoice number ' + esc(invGet().next || 1) + '.' : 'Add the bank details and numbering printed on your fee invoices.') + '</p><button class="btn" data-a="invoice">' + (invGet().payee ? 'Edit invoice details' : 'Set up invoice details') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Saves all cases as a password-protected ZIP (PDF and CSV) to the folders you choose, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +
@@ -921,6 +1001,7 @@
       else if (a === 'caloff') { lset('md.cal', null); render('Calendar reminders turned off. Events already in Outlook stay there.'); }
       else if (a === 'pdfbk') { ov.remove(); openBackup(); }
       else if (a === 'profile') { ov.remove(); openProfile(); }
+      else if (a === 'invoice') { ov.remove(); openInvoiceSettings(); }
       else if (a === 'pin') { if (pinData() && !reGate('pin')) return; ov.remove(); openPin(); }
       else if (a === 'guide') { e.preventDefault(); openGuide(); }
       else if (a === 'out') { ov.remove(); signOut(); }
@@ -1094,7 +1175,7 @@
   /* ---------- downloads (Backup / CSV buttons) ---------- */
   function saveFile(o) {
     return new Promise(function (res) {
-      var blob = new Blob([o.data], { type: /\.csv$/i.test(o.filename) ? 'text/csv' : 'application/json' });
+      var blob = new Blob([o.data], { type: /\.csv$/i.test(o.filename) ? 'text/csv' : /\.pdf$/i.test(o.filename) ? 'application/pdf' : 'application/json' });
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = o.filename; document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000); res();
     });
@@ -1176,7 +1257,7 @@
     setState();
     flush(); pull();
     subs.appointments.push(function () { calSchedule(2000); }); calSchedule(5000); bkStart();
-    var ro = ls('md.reopen'); if (ro) { lset('md.reopen', null); setTimeout(function () { toast('Confirmed. You can now make your changes.'); if (ro === 'profile') openProfile(); else if (ro === 'backup') openBackup(); else if (ro === 'pin') openPin(); }, 1800); }
+    var ro = ls('md.reopen'); if (ro) { lset('md.reopen', null); setTimeout(function () { toast('Confirmed. You can now make your changes.'); if (ro === 'profile') openProfile(); else if (ro === 'backup') openBackup(); else if (ro === 'pin') openPin(); else if (ro === 'invoice') openInvoiceSettings(); }, 1800); }
     var cn = ls('md.calnote'); if (cn) { lset('md.calnote', null); setTimeout(function () { toast(cn); }, 1500); }
     setInterval(function () { if (document.visibilityState === 'visible') { flush(); pull(); calSchedule(3000); } }, 60000);
     window.addEventListener('online', function () { st.offline = false; flush(); pull(); });

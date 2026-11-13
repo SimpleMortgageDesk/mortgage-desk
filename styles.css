@@ -558,3 +558,15 @@ tr.ing td:first-child{padding-left:26px}
 .propadd{align-items:flex-end}.propadd .f{margin:0;min-width:200px}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ptag{background:#1e3a5f;color:#bbdefb}:root:not([data-theme="light"]) .ptag.main{background:#1b3a1e;color:#c8e6c9}:root:not([data-theme="light"]) .ptag.btl{background:#4a2a00;color:#ffe0b2}:root:not([data-theme="light"]) .ptag.second{background:#3a1a45;color:#e1bee7}:root:not([data-theme="light"]) .ptag.holiday{background:#003c42;color:#b2ebf2}}
 :root[data-theme="dark"] .ptag{background:#1e3a5f;color:#bbdefb}:root[data-theme="dark"] .ptag.main{background:#1b3a1e;color:#c8e6c9}:root[data-theme="dark"] .ptag.btl{background:#4a2a00;color:#ffe0b2}:root[data-theme="dark"] .ptag.second{background:#3a1a45;color:#e1bee7}:root[data-theme="dark"] .ptag.holiday{background:#003c42;color:#b2ebf2}
+
+.feebox[hidden]{display:none}.feebox{margin-top:6px}
+.invl{margin:8px 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}.invl>b{display:block;margin-bottom:4px;font-size:13px}
+.invi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px dashed var(--line);flex-wrap:wrap;font-size:13px}.invi:first-of-type{border-top:0}.invb{display:flex;gap:6px;flex-wrap:wrap}
+.chip.ok{background:#e8f5e9;color:#1b5e20}.chip.warn{background:#fff3e0;color:#e65100}
+#invOv{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
+.invm{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;max-width:760px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px}
+.invh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.invh h2{margin:0;font-size:20px}.invm h3{margin:14px 0 4px;font-size:14px}
+.invm .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.invm .f.wide{grid-column:1/-1}.invm textarea,.invm input{width:100%;box-sizing:border-box}
+.invbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+
+.propfee{margin-top:4px}.propb{display:flex;gap:6px;flex-wrap:wrap}.chip.muted{opacity:.7}
