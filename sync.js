@@ -47,11 +47,11 @@
   function rand(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); }
   function form(o) { return Object.keys(o).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]); }).join('&'); }
 
-  async function startLogin(reauth) {
+  async function startLogin(reauth, hint) {
     var v = rand(48), st = rand(16);
     var h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
     try { localStorage.setItem('md.pkce', JSON.stringify({ v: v, st: st })); } catch (e) {}
-    location.href = AUTH + 'authorize?' + form(Object.assign({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: scopes(), state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: reauth ? 'login' : 'select_account' }, reauth && ((tok() || {}).account || {}).mail ? { login_hint: tok().account.mail } : {}));
+    location.href = AUTH + 'authorize?' + form(Object.assign({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: scopes(), state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: reauth ? 'login' : (hint ? 'login' : 'select_account') }, reauth && ((tok() || {}).account || {}).mail ? { login_hint: tok().account.mail } : (hint ? { login_hint: hint } : {})));
   }
   async function tokenRequest(params) {
     var r = await fetch(AUTH + 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(Object.assign({ client_id: CFG.clientId, scope: scopes() }, params)) });
@@ -403,7 +403,7 @@
       var max = Math.floor((W - 2 * ML - ind - (it.amt ? 120 : 0)) / (sz * (it.b ? 0.58 : 0.53)));
       pdfWrap(it.t, max).forEach(function (ln, k) {
         if (y - lh < BOT) newPage();
-        pages[pages.length - 1].push({ t: ln, x: ML + ind + (k && it.hang ? it.hang : 0), y: y, b: it.b, sz: sz });
+        pages[pages.length - 1].push({ t: ln, x: ML + ind + (k && it.hang ? it.hang : 0), y: y, b: it.b, sz: sz, red: it.red });
         if (!k && it.amt != null) { var as = it.amtSz || sz, aw = String(it.amt).length * as * (it.amtB ? 0.58 : 0.53); pages[pages.length - 1].push({ t: String(it.amt), x: W - ML - aw, y: y, b: it.amtB, sz: as }); }
         y -= lh;
       });
@@ -418,7 +418,7 @@
     obj(4, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
     pages.forEach(function (p, i) {
       var cs = '';
-      p.forEach(function (l) { if (l.rule) { cs += '0.6 w ' + ML + ' ' + l.y.toFixed(1) + ' m ' + (W - ML) + ' ' + l.y.toFixed(1) + ' l S\n'; return; } cs += 'BT /' + (l.b ? 'F2' : 'F1') + ' ' + l.sz + ' Tf 1 0 0 1 ' + l.x.toFixed(1) + ' ' + l.y.toFixed(1) + ' Tm (' + pdfStr(l.t) + ') Tj ET\n'; });
+      p.forEach(function (l) { if (l.rule) { cs += '0.6 w ' + ML + ' ' + l.y.toFixed(1) + ' m ' + (W - ML) + ' ' + l.y.toFixed(1) + ' l S\n'; return; } cs += (l.red ? '0.78 0.08 0.08 rg ' : '') + 'BT /' + (l.b ? 'F2' : 'F1') + ' ' + l.sz + ' Tf 1 0 0 1 ' + l.x.toFixed(1) + ' ' + l.y.toFixed(1) + ' Tm (' + pdfStr(l.t) + ') Tj ET' + (l.red ? ' 0 g' : '') + '\n'; });
       cs += 'BT /F1 8 Tf 1 0 0 1 ' + ML + ' 30 Tm (' + pdfStr(footer + '  |  page ' + (i + 1) + ' of ' + n) + ') Tj ET\n';
       obj(5 + 2 * i, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + W + ' ' + H + '] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ' + (6 + 2 * i) + ' 0 R >>');
       if (enc) { var eb = pdfObjEnc(enc, 6 + 2 * i, strB(cs)), es = ''; for (var q = 0; q < eb.length; q++) es += String.fromCharCode(eb[q]); cs = es; }
@@ -626,6 +626,7 @@
   function bkIdb() { return new Promise(function (res) { try { var q = indexedDB.open('md-bk', 1); q.onupgradeneeded = function () { q.result.createObjectStore('h'); }; q.onsuccess = function () { res(q.result); }; q.onerror = function () { res(null); }; } catch (e) { res(null); } }); }
   var bkDirMem = {};
   var BK_FILE = 'Mortgage-Desk-Backup.zip';
+  var BK_PREV = 'Mortgage-Desk-Backup-Previous.zip';
   async function bkGetDir(slot) {
     if (bkDirMem[slot]) return bkDirMem[slot]; var d = await bkIdb(); if (!d) return null;
     return new Promise(function (res) { try { var r = d.transaction('h').objectStore('h').get(slot); r.onsuccess = function () { res(r.result || null); }; r.onerror = function () { res(null); }; } catch (e) { res(null); } });
@@ -648,7 +649,19 @@
   }
   async function bkWrite(g, blob) {
     if (!g || g.none) return null; if (!g.ok) return g;
-    try { var fh = await g.h.getFileHandle(BK_FILE, { create: true }); var w = await fh.createWritable(); await w.write(blob); await w.close(); return { ok: true, msg: 'Saved in ' + g.h.name }; }
+    try {
+      /* keep the one before: when the existing latest file is 20+ hours old (or there is no Previous yet), copy it to Previous before it is overwritten */
+      var kept = false;
+      try {
+        var oldFh = await g.h.getFileHandle(BK_FILE), oldF = await oldFh.getFile(), prevExists = true;
+        try { await g.h.getFileHandle(BK_PREV); } catch (e0) { prevExists = false; }
+        if (oldF.size > 0 && (!prevExists || Date.now() - oldF.lastModified >= 20 * 3600 * 1000)) {
+          var pfh = await g.h.getFileHandle(BK_PREV, { create: true }), pw2 = await pfh.createWritable(); await pw2.write(await oldF.arrayBuffer()); await pw2.close(); kept = true;
+        }
+      } catch (e1) { /* no earlier backup yet */ }
+      var fh = await g.h.getFileHandle(BK_FILE, { create: true }); var w = await fh.createWritable(); await w.write(blob); await w.close();
+      return { ok: true, msg: 'Saved in ' + g.h.name + (kept ? ' (the earlier backup was kept as Previous)' : '') };
+    }
     catch (e) { return { ok: false, msg: 'Could not write to the folder (' + (e && e.name || 'error') + ').' }; }
   }
   async function bkRun(interactive) {
@@ -758,41 +771,79 @@
     });
   }
   /* ---------- invoices: your own payment details (this device) and the invoice PDF ---------- */
-  function invGet() { try { return JSON.parse(ls('md.inv') || '{}') || {}; } catch (e) { return {}; } }
-  function invSet(o) { lset('md.inv', JSON.stringify(o)); }
+  var INV_REF_DEFAULT = 'Please type {name} as your payment reference. This is really important.';
+  function invGet() {
+    var v; try { v = JSON.parse(ls('md.inv') || '{}') || {}; } catch (e) { v = {}; }
+    if (!v.accounts) { v.accounts = (v.payee || v.sort || v.acct) ? [{ id: 'a1', label: 'Main account', payee: v.payee || '', sort: v.sort || '', acct: v.acct || '' }] : []; v.def = v.accounts.length ? v.accounts[0].id : ''; }
+    if (v.note === 'Please quote the invoice number as the payment reference.') v.note = '';
+    if (v.ref == null) v.ref = INV_REF_DEFAULT;
+    var d = v.accounts.filter(function (a) { return a.id === v.def; })[0] || v.accounts[0] || {};
+    v.payee = d.payee || ''; v.sort = d.sort || ''; v.acct = d.acct || '';
+    return v;
+  }
+  function invSet(o) { var c = JSON.parse(JSON.stringify(o)); delete c.payee; delete c.sort; delete c.acct; lset('md.inv', JSON.stringify(c)); }
+  function invRefText(v, name) { return String((v || invGet()).ref || INV_REF_DEFAULT).replace(/\{name\}/g, name || profGet().name || 'me'); }
   function sortFmt(s) { s = String(s || '').replace(/\D/g, '').slice(0, 6); return s.length === 6 ? s.slice(0, 2) + '-' + s.slice(2, 4) + '-' + s.slice(4) : s; }
   function openInvoiceSettings() {
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(ov);
-    var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;margin:4px 0 10px';
+    var inp = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;margin:4px 0 8px';
+    var work = null;
     function draw(msg) {
-      var v = invGet(), lk = !!(v.payee || v.sort || v.acct) && !reFresh(), dis = lk ? ' disabled' : '';
-      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)">' +
+      var v = invGet(), have = v.accounts.length > 0, lk = have && !reFresh() && !work, dis = lk ? ' disabled' : '';
+      var accs = work || v.accounts.slice(); if (!accs.length) accs = [{ id: 'a' + Date.now(), label: '', payee: '', sort: '', acct: '' }];
+      var def = (work && work.def) || v.def || accs[0].id;
+      var blocks = accs.map(function (a, i) {
+        return '<div style="border:1px solid #D4DBDF;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Account ' + (i + 1) + '</b><label style="font-size:13px"><input type="radio" name="ivDef" data-acc="' + i + '"' + (a.id === def ? ' checked' : '') + dis + '> Default</label></div>' +
+          '<input type="hidden" data-f="id" data-i="' + i + '" value="' + esc(a.id) + '">' +
+          '<label style="font-size:13px">Label (for your own use)</label><input data-f="label" data-i="' + i + '" type="text" maxlength="40" placeholder="e.g. Business account" value="' + esc(a.label || '') + '"' + dis + ' style="' + inp + '">' +
+          '<label style="font-size:13px">Account name (payee)</label><input data-f="payee" data-i="' + i + '" type="text" maxlength="80" value="' + esc(a.payee || '') + '"' + dis + ' style="' + inp + '">' +
+          '<div style="display:flex;gap:10px"><div style="flex:1"><label style="font-size:13px">Sort code</label><input data-f="sort" data-i="' + i + '" type="text" inputmode="numeric" maxlength="8" placeholder="60-83-71" value="' + esc(a.sort || '') + '"' + dis + ' style="' + inp + '"></div><div style="flex:1"><label style="font-size:13px">Account number</label><input data-f="acct" data-i="' + i + '" type="text" inputmode="numeric" maxlength="8" value="' + esc(a.acct || '') + '"' + dis + ' style="' + inp + '"></div></div>' +
+          (accs.length > 1 && !lk ? '<button class="btn ghost sm" data-p="rm" data-i="' + i + '">Remove this account</button>' : '') + '</div>';
+      }).join('');
+      var refv = work && work.ref != null ? work.ref : v.ref;
+      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(600px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Invoice details</h2><button class="btn ghost" data-p="close">Close</button></div>' +
-        '<p style="margin:12px 0;color:#58697A;font-size:13px">Your own business payment details, printed on every invoice. They stay on this device, like your profile. Your name, business name, mobile and email come from My profile.</p>' +
+        '<p style="margin:12px 0;color:#58697A;font-size:13px">Your own business payment details, printed on invoices. They stay on this device, like your profile. Your name, business name, mobile and email come from My profile. You can keep up to five bank accounts and choose one for each invoice.</p>' +
         (lk ? '<p style="margin:0 0 10px;padding:8px 10px;background:#FFF6DD;border-radius:8px;font-size:13px">These details are locked. To change them, confirm with your Microsoft account password. <button class="btn ghost sm" data-p="unlock">Unlock</button></p>' : '') +
-        '<label>Account name (payee)</label><input id="ivPayee"' + dis + ' type="text" maxlength="80" value="' + esc(v.payee || '') + '" style="' + inp + '">' +
-        '<div style="display:flex;gap:10px"><div style="flex:1"><label>Sort code</label><input id="ivSort"' + dis + ' type="text" inputmode="numeric" maxlength="8" placeholder="60-83-71" value="' + esc(v.sort || '') + '" style="' + inp + '"></div><div style="flex:1"><label>Account number</label><input id="ivAcct"' + dis + ' type="text" inputmode="numeric" maxlength="8" value="' + esc(v.acct || '') + '" style="' + inp + '"></div></div>' +
+        blocks + (accs.length < 5 && !lk ? '<button class="btn ghost" data-p="add" style="margin-bottom:12px">+ Add another bank account</button>' : '') +
+        '<label>Payment reference line (printed in bold red). {name} becomes your profile name.</label><textarea id="ivRef"' + dis + ' rows="2" maxlength="200" style="' + inp + ';font-weight:700;color:#C62828">' + esc(refv) + '</textarea>' +
         '<label>Business address (optional, shown at the top)</label><textarea id="ivAddr"' + dis + ' rows="3" maxlength="300" style="' + inp + '">' + esc(v.addr || '') + '</textarea>' +
         '<div style="display:flex;gap:10px"><div style="flex:1"><label>Next invoice number</label><input id="ivNext"' + dis + ' type="number" min="1" step="1" value="' + esc(v.next || 1) + '" style="' + inp + '"></div><div style="flex:1"><label>Payment terms (days)</label><input id="ivDays"' + dis + ' type="number" min="0" step="1" value="' + esc(v.days == null ? 7 : v.days) + '" style="' + inp + '"></div></div>' +
-        '<label>Note at the foot of the invoice (optional)</label><textarea id="ivNote"' + dis + ' rows="2" maxlength="300" style="' + inp + '">' + esc(v.note == null ? 'Please quote the invoice number as the payment reference.' : v.note) + '</textarea>' +
+        '<label>Extra note at the foot of the invoice (optional)</label><textarea id="ivNote"' + dis + ' rows="2" maxlength="300" style="' + inp + '">' + esc(v.note || '') + '</textarea>' +
         '<button class="btn" data-p="save"' + dis + '>Save invoice details</button><p id="ivMsg" style="min-height:18px;margin:10px 0 0">' + esc(msg || '') + '</p></div>';
+    }
+    function grab() {
+      var v = invGet(), list = [];
+      ov.querySelectorAll('[data-f="id"]').forEach(function (e) { list.push({ id: e.value, label: '', payee: '', sort: '', acct: '' }); });
+      ov.querySelectorAll('[data-f]').forEach(function (e) { var f = e.getAttribute('data-f'); if (f !== 'id') list[+e.getAttribute('data-i')][f] = e.value; });
+      var d = ov.querySelector('input[name="ivDef"]:checked');
+      return { accounts: list, def: d ? list[+d.getAttribute('data-acc')].id : (list[0] || {}).id, ref: ($('ivRef') || {}).value, addr: ($('ivAddr') || {}).value, next: ($('ivNext') || {}).value, days: ($('ivDays') || {}).value, note: ($('ivNote') || {}).value };
     }
     draw();
     var say = function (m) { var e = $('ivMsg'); if (e) e.textContent = m; };
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
     ov.addEventListener('click', function (e) {
-      var b = e.target.closest && e.target.closest('[data-p]'); if (!b) return; b = b.getAttribute('data-p');
-      var v = invGet();
-      if (b === 'close') ov.remove();
-      else if (b === 'unlock') reGate('invoice');
-      else if (b === 'save') {
-        if ((v.payee || v.sort || v.acct) && !reGate('invoice')) return;
-        var sc = sortFmt(($('ivSort') || {}).value), ac = String(($('ivAcct') || {}).value || '').replace(/\D/g, '');
-        if (sc && sc.length !== 8) { say('The sort code needs 6 digits.'); return; }
-        if (ac && ac.length !== 8) { say('The account number needs 8 digits.'); return; }
-        invSet({ payee: (($('ivPayee') || {}).value || '').trim(), sort: sc, acct: ac, addr: (($('ivAddr') || {}).value || '').trim(), next: Math.max(1, parseInt(($('ivNext') || {}).value, 10) || 1), days: Math.max(0, parseInt(($('ivDays') || {}).value, 10) || 0), note: (($('ivNote') || {}).value || '').trim() });
+      var b = e.target.closest && e.target.closest('[data-p]'); if (!b) return; var act = b.getAttribute('data-p');
+      if (act === 'close') ov.remove();
+      else if (act === 'unlock') reGate('invoice');
+      else if (act === 'add') { work = grab(); work.accounts.push({ id: 'a' + Date.now(), label: '', payee: '', sort: '', acct: '' }); draw(); }
+      else if (act === 'rm') { work = grab(); work.accounts.splice(+b.getAttribute('data-i'), 1); if (!work.accounts.some(function (a) { return a.id === work.def; })) work.def = work.accounts[0].id; draw(); }
+      else if (act === 'save') {
+        var v = invGet();
+        if (v.accounts.length && !reGate('invoice')) return;
+        var g = grab(), out = [];
+        for (var i = 0; i < g.accounts.length; i++) {
+          var a = g.accounts[i], sc = sortFmt(a.sort), ac = String(a.acct || '').replace(/\D/g, '');
+          if (!(a.payee.trim() || sc || ac || a.label.trim())) continue;
+          if (sc.length !== 8) { say('Account ' + (i + 1) + ': the sort code needs 6 digits.'); return; }
+          if (ac.length !== 8) { say('Account ' + (i + 1) + ': the account number needs 8 digits.'); return; }
+          out.push({ id: a.id, label: a.label.trim() || ('Account ' + (out.length + 1)), payee: a.payee.trim(), sort: sc, acct: ac });
+        }
+        if (!out.length) { say('Add at least one bank account.'); return; }
+        work = null;
+        invSet({ accounts: out, def: out.some(function (a) { return a.id === g.def; }) ? g.def : out[0].id, ref: (g.ref || '').trim() || INV_REF_DEFAULT, addr: (g.addr || '').trim(), next: Math.max(1, parseInt(g.next, 10) || 1), days: Math.max(0, parseInt(g.days, 10) || 0), note: (g.note || '').trim() });
         draw('Saved. These details are now locked.');
       }
     });
@@ -820,7 +871,7 @@
     if (inv.payee) it.push({ t: 'Account name:  ' + inv.payee, sz: 10 });
     if (inv.sort) it.push({ t: 'Sort code:  ' + inv.sort, sz: 10 });
     if (inv.acct) it.push({ t: 'Account number:  ' + inv.acct, sz: 10 });
-    it.push({ t: 'Payment reference:  Invoice ' + (inv.no || ''), sz: 10, gap: 8 });
+    if (inv.ref) it.push({ t: inv.ref, b: 1, sz: 11, red: 1, gap: 8 }); else it.push({ t: 'Payment reference:  Invoice ' + (inv.no || ''), sz: 10, gap: 8 });
     if (inv.dueDate) it.push({ t: 'Please make payment within ' + inv.days + ' day' + (inv.days === 1 ? '' : 's') + ', by ' + dmy(inv.dueDate) + '.', sz: 10, gap: 6 });
     if (inv.note) it.push({ t: inv.note, sz: 10, gap: 6 });
     it.push({ t: 'If you have any questions about this invoice, please contact me' + (f.phone ? ' on ' + f.phone : '') + (f.email ? (f.phone ? ' or ' : ' at ') + f.email : '') + '.', sz: 10, gap: 14 });
@@ -830,6 +881,7 @@
   window.mdInvoice = {
     get: invGet,
     settings: openInvoiceSettings,
+    refText: invRefText,
     bump: function (no) { var v = invGet(), n = parseInt(no, 10); if (!isNaN(n) && n >= (v.next || 1)) { v.next = n + 1; invSet(v); } },
     download: function (inv, filename) { return saveFile({ filename: filename, data: invPdfBytes(inv) }); },
     bytes: invPdfBytes
@@ -850,7 +902,7 @@
       var c = bkCfg(), hasPw = !!bkPw(), num = waNum(), editing = !hasPw || editPw, dis = editing ? '' : ' disabled', dstyle = editing ? '' : ';background:#EDF0F1;color:#8a98a3';
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PDF/CSV Case Backup</h2><button class="btn ghost" data-b="close">Close</button></div>' +
-        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file. Each new backup replaces the previous one.</p>' +
+        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file. Two files are kept in each folder: Mortgage-Desk-Backup.zip (the latest) and Mortgage-Desk-Backup-Previous.zip (the one before, about a day older). Both open with the same password.</p>' +
         '<h3 style="margin:14px 0 4px;font-size:15px">1. Where to save</h3>' +
         (pick ? loc('dir', 'Location 1', false) + loc('dir2', 'Location 2', true) : '<p style="margin:4px 0;color:#58697A;font-size:13px">This browser cannot save to a chosen folder (phones and some browsers). Back up now downloads the ZIP file to this device instead.</p>') +
         '<h3 style="margin:16px 0 4px;font-size:15px">2. Backup password</h3>' +
@@ -937,10 +989,19 @@
     var bad = !CFG.clientId || /PASTE/i.test(CFG.clientId);
     var o = overlay('<div style="width:min(420px,100%);background:#fff;border:1px solid #D4DBDF;border-radius:12px;padding:28px;box-shadow:0 8px 30px rgba(16,28,38,.12)">' +
       '<div style="font-weight:700;font-size:20px;margin-bottom:6px">&#9670; Mortgage Desk</div>' +
-      '<p style="color:#58697A;margin:0 0 18px;font-size:14px;line-height:1.45">Sign in with your Microsoft account. Your cases are stored in your own OneDrive and nowhere else.</p>' +
+      '<p style="color:#58697A;margin:0 0 16px;font-size:14px;line-height:1.45">Sign in with your Microsoft account. Your cases are stored in your own OneDrive and nowhere else.</p>' +
+      (bad ? '' : '<label for="mdUser" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">User ID (your sign-up email address)</label><input id="mdUser" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="name@outlook.com" value="' + esc(String(ls('md.lastMail') || '')) + '" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #B9C4CA;border-radius:8px;font:15px system-ui;margin-bottom:8px">' +
+        '<p style="color:#58697A;margin:0 0 14px;font-size:12.5px;line-height:1.4">You will type your password on Microsoft\'s own secure page next. This app never sees it.</p>') +
       (bad ? '<p style="color:#A3261F;font-size:14px">This copy has not been set up yet (no Microsoft app ID).</p>' : '<button id="mdGo" style="width:100%;padding:12px;border:0;border-radius:8px;background:#0A6B50;color:#fff;font:600 15px system-ui;cursor:pointer">Sign in with Microsoft</button>') +
       '<div id="mdErr" style="color:#A3261F;font-size:13px;margin-top:12px;min-height:16px">' + esc(msg || '') + '</div></div>');
-    var b = o.querySelector('#mdGo'); if (b) b.onclick = function () { b.disabled = true; startLogin(); };
+    var b = o.querySelector('#mdGo'), u = o.querySelector('#mdUser');
+    var go = function () {
+      var em = u ? u.value.trim() : '';
+      if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { var er = o.querySelector('#mdErr'); if (er) er.textContent = 'That does not look like an email address. Check it, or clear the box to choose an account on the next page.'; if (u) u.focus(); return; }
+      b.disabled = true; startLogin(false, em);
+    };
+    if (b) b.onclick = go;
+    if (u) { u.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } }; if (!u.value) u.focus(); }
   }
   function sessionExpired() { showSignIn('Your sign-in has expired. Please sign in again. Your unsaved changes are kept on this device.'); }
 
@@ -959,7 +1020,7 @@
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">My profile</h3><p style="margin:0 0 8px;color:#58697A">' + (profGet().name ? esc(profGet().name) + (profGet().biz ? ' &middot; ' + esc(profGet().biz) : '') : 'Add your name, business, mobile number and email.') + '</p><button class="btn" data-a="profile">' + (profGet().name || profGet().phone ? 'Edit profile' : 'Set up profile') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
-        '<h3 style="margin:18px 0 6px;font-size:15px">Invoices</h3><p style="margin:0 0 8px;color:#58697A">' + (invGet().payee ? 'Paying to ' + esc(invGet().payee) + ', next invoice number ' + esc(invGet().next || 1) + '.' : 'Add the bank details and numbering printed on your fee invoices.') + '</p><button class="btn" data-a="invoice">' + (invGet().payee ? 'Edit invoice details' : 'Set up invoice details') + '</button>' +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Invoices</h3><p style="margin:0 0 8px;color:#58697A">' + (invGet().accounts.length ? invGet().accounts.length + ' bank account' + (invGet().accounts.length === 1 ? '' : 's') + ' saved, next invoice number ' + esc(invGet().next || 1) + '.' : 'Add the bank details and numbering printed on your fee invoices.') + '</p><button class="btn" data-a="invoice">' + (invGet().payee ? 'Edit invoice details' : 'Set up invoice details') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Saves all cases as a password-protected ZIP (PDF and CSV) to the folders you choose, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Import a backup file</h3><p style="margin:0 0 8px;color:#58697A">Loads cases from a Mortgage Desk backup (.json). Cases that already exist are not overwritten.</p>' +

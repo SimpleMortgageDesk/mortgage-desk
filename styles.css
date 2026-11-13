@@ -570,3 +570,15 @@ tr.ing td:first-child{padding-left:26px}
 .invbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 .propfee{margin-top:4px}.propb{display:flex;gap:6px;flex-wrap:wrap}.chip.muted{opacity:.7}
+
+.st-enquiry{--rowbg:#e3edf7}.st-factfind{--rowbg:#ece4f8}.st-dip{--rowbg:#fff2bd}.st-application{--rowbg:#ffe0c2}.st-offer{--rowbg:#d4f0e0}.st-completed{--rowbg:#e4e6e8}.st-lost{--rowbg:#f4dcdc}
+tbody tr.stc td{background:var(--rowbg)}
+tbody tr.stc:hover td{background:var(--rowbg);filter:brightness(.94)}
+tr.rend-red td:first-child{box-shadow:inset 6px 0 0 #c62828}
+tr.rend-amb td:first-child{box-shadow:inset 6px 0 0 #f0a000}
+.stlegend{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 8px;font-size:12px}
+.stl{background:var(--rowbg);border:1px solid rgba(0,0,0,.12);border-radius:999px;padding:2px 10px;color:var(--ink);font-weight:600}
+.stlnote{margin-left:auto;color:var(--muted);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.rbar{display:inline-block;width:6px;height:14px;border-radius:2px;margin-left:8px}.rbar.red{background:#c62828}.rbar.amb{background:#f0a000}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .st-enquiry{--rowbg:#1f3345}:root:not([data-theme="light"]) .st-factfind{--rowbg:#33264a}:root:not([data-theme="light"]) .st-dip{--rowbg:#4a4113}:root:not([data-theme="light"]) .st-application{--rowbg:#4f3216}:root:not([data-theme="light"]) .st-offer{--rowbg:#17402b}:root:not([data-theme="light"]) .st-completed{--rowbg:#2c3033}:root:not([data-theme="light"]) .st-lost{--rowbg:#4a2323}:root:not([data-theme="light"]) tbody tr.stc:hover td{filter:brightness(1.15)}}
+:root[data-theme="dark"] .st-enquiry{--rowbg:#1f3345}:root[data-theme="dark"] .st-factfind{--rowbg:#33264a}:root[data-theme="dark"] .st-dip{--rowbg:#4a4113}:root[data-theme="dark"] .st-application{--rowbg:#4f3216}:root[data-theme="dark"] .st-offer{--rowbg:#17402b}:root[data-theme="dark"] .st-completed{--rowbg:#2c3033}:root[data-theme="dark"] .st-lost{--rowbg:#4a2323}:root[data-theme="dark"] tbody tr.stc:hover td{filter:brightness(1.15)}

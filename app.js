@@ -303,7 +303,8 @@ function casesHTML(){
   var h='<div class="pagehead"><h1>All cases</h1><button class="btn ghost" data-act="export">Export CSV</button></div>'+
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+lenderSelHTML()+revSelHTML()+'<details class="colpick"><summary class="btn ghost">Columns</summary><div class="colbox">'+CASE_COLS.map(function(c){return '<label><input type="checkbox" data-colk="'+c[0]+'"'+(colOn(c[0])?' checked':'')+'> '+c[1]+'</label>'}).join('')+'</div></details>'+((stageFilter||lenderFilter||revFilter)?' <button type="button" class="btn ghost" data-clrf="1">Clear filters</button>':'')+'</div>';
   if(!cases.length)return h+emptyHTML();
-  h+='<div class="tw"><table><thead><tr><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
+  h+='<div class="stlegend" aria-label="Colour key">'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<span class="stl st-'+s.id+'">'+s.label+'</span>'}).join('')+'<span class="stlnote"><i class="rbar red"></i> review or rate end within 30 days or overdue <i class="rbar amb"></i> within 90 days</span></div>'+
+  '<div class="tw"><table><thead><tr><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="8" class="muted">No cases match.</td></tr>';
   var grp={};list.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});var done={};
   list.forEach(function(c0){
@@ -311,7 +312,8 @@ function casesHTML(){
     if(g.length>1)h+='<tr class="cg"><td colspan="8"><b>'+esc(names(c0))+'</b> <span class="muted">· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
     g.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
-    h+='<tr class="click'+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
+    var rv=reviewOf(c),rd=rv?diff(rv):9999,rcl=rd<=30?' rend-red':rd<=90?' rend-amb':'';
+    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
       (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
       (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
       (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
@@ -656,7 +658,7 @@ function invOpen(c,inv){
   var addr=own&&fv('f-propertyAddress')||c.propertyAddress||'',use=propLabel(own&&fv('f-propUse')||c.propUse),mtype=own&&fv('f-type')||c.type||'',lender=own&&fv('f-lender')||c.lender||'';
   var re=[use,short(addr)].filter(Boolean).join(' · ')+(mtype||lender?' ('+[mtype,lender].filter(Boolean).join(', ')+')':'');
   var desc=fv('f-feeDesc')||c.feeDesc||'Broker fee';if(desc==='Broker fee'&&(mtype||addr))desc='Broker fee'+(mtype?' - '+mtype:'')+(addr?', '+short(addr):'');
-  inv=inv||{id:uid(),no:String(s.next||1),date:iso(TODAY),to:invBillTo(c),re:re,desc:desc,amount:num(fv('f-feeAmount'))||c.feeAmount||'',payee:s.payee||'',sort:s.sort||'',acct:s.acct||'',days:s.days==null?7:s.days,note:s.note==null?'Please quote the invoice number as the payment reference.':s.note,from:f,status:'sent'};
+  inv=inv||{id:uid(),no:String(s.next||1),date:iso(TODAY),to:invBillTo(c),re:re,desc:desc,amount:num(fv('f-feeAmount'))||c.feeAmount||'',payee:s.payee||'',sort:s.sort||'',acct:s.acct||'',days:s.days==null?7:s.days,note:s.note||'',ref:(window.mdInvoice&&window.mdInvoice.refText?window.mdInvoice.refText(s,f.name):''),from:f,status:'sent'};
   var o=document.createElement('div');o.id='invOv';o.setAttribute('role','dialog');o.setAttribute('aria-label','Invoice');
   var F=function(id,label,val,type,extra){return '<label class="f'+(extra&&extra.wide?' wide':'')+'">'+label+'<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':val)+'"'+(type==='number'?' min="0" step="0.01"':'')+'></label>'};
   var T=function(id,label,val,rows){return '<label class="f wide">'+label+'<textarea id="'+id+'" rows="'+(rows||3)+'">'+esc(val||'')+'</textarea></label>'};
@@ -665,9 +667,9 @@ function invOpen(c,inv){
     '<div class="grid">'+F('ivNo','Invoice number',inv.no)+F('ivDate','Invoice date',inv.date,'date')+'</div>'+
     '<div class="grid">'+T('ivTo','Bill to (name and address)',inv.to,4)+F('ivRe','Regarding (property)',inv.re||'','text',{wide:1})+'</div>'+
     '<div class="grid">'+F('ivDesc','Description',inv.desc,'text',{wide:1})+F('ivAmount','Amount (£)',inv.amount,'number')+F('ivDays','Payment terms (days)',inv.days,'number')+'</div>'+
-    '<h3>Payment details</h3><div class="grid">'+F('ivPayee','Account name',inv.payee)+F('ivSort','Sort code',inv.sort)+F('ivAcct','Account number',inv.acct)+'</div>'+
+    '<h3>Payment details</h3>'+((s.accounts||[]).length>1?'<div class="grid"><label class="f wide">Pay into which account?<select id="ivAccSel">'+s.accounts.map(function(a){var sel=(a.payee===inv.payee&&a.sort===inv.sort&&a.acct===inv.acct);return '<option value="'+esc(a.id)+'"'+(sel?' selected':'')+'>'+esc(a.label||a.payee)+' ('+esc(a.sort)+' / '+esc(a.acct)+')</option>'}).join('')+'<option value=""'+(s.accounts.some(function(a){return a.payee===inv.payee&&a.sort===inv.sort&&a.acct===inv.acct})?'':' selected')+'>Other (typed below)</option></select></label></div>':'')+'<div class="grid">'+F('ivPayee','Account name',inv.payee)+F('ivSort','Sort code',inv.sort)+F('ivAcct','Account number',inv.acct)+'</div>'+
     '<h3>From</h3><div class="grid">'+F('ivBiz','Business name',inv.from.biz)+F('ivName','Your name',inv.from.name)+F('ivPhone','Phone',inv.from.phone)+F('ivEmail','Email',inv.from.email)+T('ivAddr','Business address (optional)',inv.from.addr,2)+'</div>'+
-    '<div class="grid">'+T('ivNote','Note at the foot (optional)',inv.note,2)+'</div>'+
+    '<div class="grid"><label class="f wide">Payment reference line (printed in bold red)<textarea id="ivRef" rows="2" style="font-weight:700;color:#C62828">'+esc(inv.ref||'')+'</textarea></label></div>'+'<div class="grid">'+T('ivNote','Note at the foot (optional)',inv.note,2)+'</div>'+
     '<div id="ivMsg" class="muted" style="min-height:18px"></div>'+
     '<div class="invbtns"><button type="button" class="btn ghost" data-invsave="print">Save &amp; print</button><button type="button" class="btn" data-invsave="pdf">Save &amp; download PDF</button></div></div>';
   o.dataset.cid=c.id;o.dataset.iid=inv.id;o.dataset.isnew=isNew?'1':'';
@@ -677,7 +679,7 @@ function invClose(){var o=$('#invOv');if(o)o.remove()}
 function invRead(){
   var g=function(id){var e=$('#'+id);return e?e.value.trim():''},o=$('#invOv');
   var amt=num(g('ivAmount')),days=parseInt(g('ivDays'),10);if(isNaN(days)||days<0)days=0;
-  var inv={id:o.dataset.iid,no:g('ivNo'),date:g('ivDate')||iso(TODAY),to:g('ivTo'),re:g('ivRe'),desc:g('ivDesc'),amount:amt,total:amt,payee:g('ivPayee'),sort:g('ivSort'),acct:g('ivAcct').replace(/\D/g,''),days:days,note:g('ivNote'),from:{biz:g('ivBiz'),name:g('ivName'),phone:g('ivPhone'),email:g('ivEmail'),addr:g('ivAddr')},status:'sent'};
+  var inv={id:o.dataset.iid,no:g('ivNo'),date:g('ivDate')||iso(TODAY),to:g('ivTo'),re:g('ivRe'),desc:g('ivDesc'),amount:amt,total:amt,payee:g('ivPayee'),sort:g('ivSort'),acct:g('ivAcct').replace(/\D/g,''),days:days,note:g('ivNote'),ref:g('ivRef'),from:{biz:g('ivBiz'),name:g('ivName'),phone:g('ivPhone'),email:g('ivEmail'),addr:g('ivAddr')},status:'sent'};
   inv.dueDate=invAddDays(inv.date,days);
   return inv;
 }
@@ -708,12 +710,12 @@ function invPrint(c,inv){
     '<div class="meta"><span>Invoice number: '+esc(inv.no)+'</span><span>Date: '+dmy(inv.date)+'</span></div>'+
     '<div><div style="font-size:12px;font-weight:700;letter-spacing:.06em">BILL TO</div><div style="font-size:15px">'+br(inv.to)+'</div>'+(inv.re?'<div style="margin-top:10px"><b>Regarding:</b> '+esc(inv.re)+'</div>':'')+'</div>'+
     '<table><thead><tr><th>DESCRIPTION</th><th class="amt">AMOUNT</th></tr></thead><tbody><tr><td>'+esc(inv.desc)+'</td><td class="amt">'+g(inv.amount)+'</td></tr></tbody><tfoot><tr><td>TOTAL</td><td class="amt">'+g(inv.total!=null?inv.total:inv.amount)+'</td></tr></tfoot></table>'+
-    '<div class="pay"><b>Payment details</b>Please pay by bank transfer to:<br>'+(inv.payee?'Account name: '+esc(inv.payee)+'<br>':'')+(inv.sort?'Sort code: '+esc(inv.sort)+'<br>':'')+(inv.acct?'Account number: '+esc(inv.acct)+'<br>':'')+'Payment reference: Invoice '+esc(inv.no)+(inv.dueDate?'<br><br>Please make payment within '+inv.days+' day'+(inv.days===1?'':'s')+', by '+dmy(inv.dueDate)+'.':'')+(inv.note?'<br>'+br(inv.note):'')+'</div>'+
+    '<div class="pay"><b>Payment details</b>Please pay by bank transfer to:<br>'+(inv.payee?'Account name: '+esc(inv.payee)+'<br>':'')+(inv.sort?'Sort code: '+esc(inv.sort)+'<br>':'')+(inv.acct?'Account number: '+esc(inv.acct)+'<br>':'')+(inv.ref?'<span style="color:#C62828;font-weight:700">'+esc(inv.ref)+'</span>':'Payment reference: Invoice '+esc(inv.no))+(inv.dueDate?'<br><br>Please make payment within '+inv.days+' day'+(inv.days===1?'':'s')+', by '+dmy(inv.dueDate)+'.':'')+(inv.note?'<br>'+br(inv.note):'')+'</div>'+
     '<p>If you have any questions about this invoice, please contact me'+(f.phone?' on '+esc(f.phone):'')+(f.email?(f.phone?' or ':' at ')+esc(f.email):'')+'.</p><div class="ty">THANK YOU</div>'+
     '<sc'+'ript>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></b'+'ody></h'+'tml>';
   var w=window.open('','_blank');if(!w){toast('Allow pop-ups to print the invoice');return}w.document.open();w.document.write(h);w.document.close();
 }
-document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='f-feeMode'){var bx=x.closest('fieldset').querySelector('.feebox');if(bx)bx.hidden=x.value!=='fee'}});
+document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='ivAccSel'){var s=(window.mdInvoice&&window.mdInvoice.get())||{},a=(s.accounts||[]).filter(function(y){return y.id===x.value})[0];if(a){$('#ivPayee').value=a.payee;$('#ivSort').value=a.sort;$('#ivAcct').value=a.acct}}if(x&&x.id==='f-feeMode'){var bx=x.closest('fieldset').querySelector('.feebox');if(bx)bx.hidden=x.value!=='fee'}});
 document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;
   var pib=t.closest('[data-propinv]');if(pib){var pc=cases.filter(function(x){return x.id===pib.getAttribute('data-propinv')})[0];if(!pc)return;if(!(window.mdInvoice&&window.mdInvoice.get().payee)&&!confirm('Your bank details are not set up yet (Settings → Invoices). Create the invoice anyway and type them in by hand?'))return;autoSave();invOpen(pc);return}
   if(t.id==='invNew'){var c=currentCase();if(!c)return;if(!(window.mdInvoice&&window.mdInvoice.get().payee)&&!confirm('Your bank details are not set up yet (Settings → Invoices). Create the invoice anyway and type them in by hand?'))return;autoSave();invOpen(c);return}
