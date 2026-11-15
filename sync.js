@@ -77,7 +77,10 @@
     opt = opt || {};
     var at = await getToken();
     var url = path.indexOf('http') === 0 ? path : GRAPH + path;
-    var r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + at }, opt.headers || {}) }));
+    var ac = (typeof AbortController === 'function') ? new AbortController() : null, tm = ac ? setTimeout(function () { ac.abort(); }, 25000) : 0, r;
+    try { r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + at }, opt.headers || {}), signal: ac ? ac.signal : undefined })); }
+    catch (fe) { if (fe && fe.name === 'AbortError') { var te = new TypeError('NetworkError: OneDrive did not answer in time'); throw te; } throw fe; }
+    finally { if (tm) clearTimeout(tm); }
     if (r.status === 401 && !retried) { var t = tok(); if (t) { t.exp = 0; } return gfetch(path, opt, true); }
     if ((r.status === 429 || r.status === 503) && !retried) { await sleep(Math.min(10, +r.headers.get('Retry-After') || 2) * 1000); return gfetch(path, opt, true); }
     return r;
@@ -102,7 +105,7 @@
   function idbClearAll() { return new Promise(function (res) { if (!idb) return res(); try { var t = idb.transaction(['docs', 'dirty'], 'readwrite'); t.objectStore('docs').clear(); t.objectStore('dirty').clear(); t.oncomplete = res; t.onerror = res; } catch (e) { res(); } }); }
 
   var mem = { cases: {}, notebook: {}, appointments: {}, marketing: {} }, dirty = {}, vctr = 0, subs = { cases: [], notebook: [], appointments: [], marketing: [] };
-  function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); }
+  function persistDoc(col, id) { var d = mem[col][id]; if (d) idbPut('docs', { k: col + '/' + id, col: col, id: id, data: d.data, etag: d.etag, itemId: d.itemId }); mirQueue(col, id); }
   function snap(col) { return { docs: Object.keys(mem[col]).map(function (id) { var d = mem[col][id].data; return { id: id, data: function () { return clone(d); } }; }) }; }
   function notify(col) { subs[col].forEach(function (cb) { try { cb(snap(col)); } catch (e) { console.error(e); } }); }
   var docPath = function (col, id) { return APP + ':/' + enc(col + '/' + id + '.json'); };
@@ -110,7 +113,17 @@
   /* ---------- status text ---------- */
   var st = { offline: false, busy: '', last: 0, err: '' };
   function pending() { return Object.keys(dirty).length; }
+  function odBanner() {
+    var b = $('odBanner'), show = !!tok() && (st.offline || /Sync problem/.test(st.err || ''));
+    if (!show) { if (b) b.remove(); return; }
+    var n = pending(), src = mirLoaded ? 'the local copy in your folder' : 'the copy kept on this device';
+    var txt = (navigator.onLine === false ? 'You are offline.' : 'OneDrive is not responding.') + ' Showing ' + src + '. You can keep working: ' + (n ? n + ' change' + (n > 1 ? 's are' : ' is') + ' waiting and will upload' : 'changes will upload') + ' when OneDrive is back.';
+    if (!b) { b = document.createElement('div'); b.id = 'odBanner'; b.setAttribute('role', 'status'); b.style.cssText = 'position:sticky;top:0;z-index:60;background:#FFF3CD;color:#5a4300;border-bottom:1px solid #e5cf7a;padding:8px 16px;font:14px system-ui,sans-serif;display:flex;gap:10px;align-items:center;justify-content:center'; var app = $('app'); if (app) app.insertBefore(b, app.firstChild); else document.body.insertBefore(b, document.body.firstChild); }
+    b.innerHTML = '<span>' + esc(txt) + '</span><button class="btn ghost sm" id="odRetry">Try again</button>';
+    var r = $('odRetry'); if (r) r.onclick = function () { st.offline = false; st.err = ''; setState(); flush(); pull(); };
+  }
   function setState() {
+    try { odBanner(); } catch (e) {}
     var el = $('syncState'); if (!el) return;
     var txt, col = '#58697A';
     if (!tok()) txt = 'Not signed in';
@@ -133,7 +146,7 @@
   }
   function localDelete(col, id) {
     if (col === 'appointments' && mem[col][id] && mem[col][id].data && mem[col][id].data.calId) { var cd = calDelList(); cd.push(mem[col][id].data.calId); setCalDel(cd); calSchedule(2000); }
-    delete mem[col][id]; idbDel('docs', col + '/' + id);
+    delete mem[col][id]; idbDel('docs', col + '/' + id); mirQueue(col, id);
     var k = col + '/' + id, nd = { k: k, col: col, id: id, kind: 'del', patch: {}, v: ++vctr };
     dirty[k] = nd; idbPut('dirty', nd); notify(col); scheduleFlush(); setState();
   }
@@ -220,10 +233,11 @@
           if (dirty[col + '/' + it.id]) return;
           if (!loc || loc.etag !== it.etag) todo.push({ col: col, it: it });
         });
-        Object.keys(mem[col]).forEach(function (id) { if (!seen[id] && !dirty[col + '/' + id] && mem[col][id].etag) { delete mem[col][id]; idbDel('docs', col + '/' + id); removed[col] = 1; } });
+        Object.keys(mem[col]).forEach(function (id) { if (!seen[id] && !dirty[col + '/' + id] && mem[col][id].etag) { delete mem[col][id]; idbDel('docs', col + '/' + id); mirQueue(col, id); removed[col] = 1; } });
       }
-      var total = todo.length, done = 0, touched = {}, big = total > 20;
+      var total = todo.length, done = 0, touched = {}, big = total > 20 && !Object.keys(mem.cases).length;
       if (big) showLoading('Loading your cases from OneDrive… 0 of ' + total);
+      else if (total > 20) st.busy = 'Updating from OneDrive…', setState();
       var idx = 0;
       async function worker() {
         while (idx < todo.length) {
@@ -236,15 +250,15 @@
         }
       }
       await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
-      hideLoading();
+      hideLoading(); st.busy = '';
       COLS.forEach(function (c) { if (touched[c] || removed[c]) notify(c); });
       if (!firstPullDone) {
         firstPullDone = true;
         if (!Object.keys(mem.cases).length && !Object.keys(dirty).length) toast('No cases found in your OneDrive yet. Open Settings and choose "Import backup file".');
       }
       st.offline = false; st.err = ''; st.last = Date.now();
-    } catch (e) { hideLoading(); handleErr(e); }
-    pulling = false; setState();
+    } catch (e) { hideLoading(); st.busy = ''; handleErr(e); if (!Object.keys(mem.cases).length) mirLoad('OneDrive is not answering'); }
+    pulling = false; setState(); odBanner();
   }
 
   function showLoading(txt) {
@@ -259,7 +273,20 @@
   function calOn() { return ls('md.cal') === '1'; }
   function calDelList() { try { return JSON.parse(ls('md.caldel') || '[]'); } catch (e) { return []; } }
   function setCalDel(a) { lset('md.caldel', JSON.stringify(a)); }
-  function calHash(a) { return JSON.stringify([a.who, a.type, a.date, a.time, a.dur, a.mode, a.where]); }
+  function calText(a) {
+    var L = ['Auto Booked Appointment', '', [a.type, a.mode].filter(Boolean).join(' · ')];
+    if (a.notes) { L.push('', 'Appointment notes:', a.notes); }
+    var cr = a.caseId && mem.cases[a.caseId], cd = cr && cr.data, ns = (cd && cd.notes) || [];
+    if (ns.length) {
+      L.push('', 'Client notes from Mortgage Desk:');
+      ns.slice().sort(function (x, y) { return (x.ts || 0) - (y.ts || 0); }).forEach(function (n) {
+        var d = n.ts ? new Date(n.ts) : null, ds = d ? ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear() : '';
+        L.push((ds ? ds + ': ' : '- ') + String(n.text || ''));
+      });
+    }
+    return L.join('\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+  }
+  function calHash(a) { return JSON.stringify([a.who, a.type, a.date, a.time, a.dur, a.mode, a.where, calText(a)]); }
   function calWall(date, time, plusMin) {
     var d = date.split('-'), t = time.split(':');
     return new Date(Date.UTC(+d[0], +d[1] - 1, +d[2], +t[0], (+t[1] || 0) + plusMin)).toISOString().slice(0, 19);
@@ -270,7 +297,7 @@
       start: { dateTime: calWall(a.date, a.time, 0), timeZone: 'Europe/London' },
       end: { dateTime: calWall(a.date, a.time, +a.dur || 30), timeZone: 'Europe/London' },
       location: { displayName: a.where || '' },
-      body: { contentType: 'text', content: [a.type, a.mode].filter(Boolean).join(' · ') },
+      body: { contentType: 'text', content: calText(a) },
       isReminderOn: true, reminderMinutesBeforeStart: CAL_MIN, showAs: 'busy'
     };
   }
@@ -637,6 +664,122 @@
     return new Promise(function (res) { try { var t = d.transaction('h', 'readwrite'); if (h) t.objectStore('h').put(h, slot); else t.objectStore('h').delete(slot); t.oncomplete = function () { res(); }; t.onerror = function () { res(); }; } catch (e) { res(); } });
   }
   function bkCanPick() { return typeof window.showDirectoryPicker === 'function'; }
+
+  /* ---------- local copy: an identical set of the records in a folder on this computer (loads when OneDrive is slow or down) ---------- */
+  var mirH = null, mirQ = {}, mirTimer = null, mirBusy = false, mirLoaded = false, mirReady = false, mirErr = '';
+  function mirMail() { var t = tok(); return String(t && t.account && t.account.mail || ls('md.lastMail') || '').toLowerCase(); }
+  function mirInfo() { try { return JSON.parse(ls('md.mir') || 'null') || null; } catch (e) { return null; } }
+  function mirOn() { return !!mirInfo(); }
+  async function mirHandle() { if (mirH) return mirH; mirH = await bkGetDir('mirror'); return mirH; }
+  async function mirPerm(ask) {
+    var h = await mirHandle(); if (!h) return 'none';
+    try {
+      var p = await h.queryPermission({ mode: 'readwrite' });
+      if (p !== 'granted' && ask) p = await h.requestPermission({ mode: 'readwrite' });
+      return p;
+    } catch (e) { return 'denied'; }
+  }
+  function mirQueue(col, id) { if (!mirOn()) return; mirQ[col + '/' + id] = 1; clearTimeout(mirTimer); mirTimer = setTimeout(mirFlush, 1500); }
+  async function mirSub(h, col, create) { try { return await h.getDirectoryHandle(col, { create: !!create }); } catch (e) { return null; } }
+  async function mirWriteOne(h, col, id) {
+    var d = mem[col] && mem[col][id], sub = await mirSub(h, col, true); if (!sub) throw new Error('folder');
+    if (!d) { try { await sub.removeEntry(id + '.json'); } catch (e) {} return; }
+    var fh = await sub.getFileHandle(id + '.json', { create: true }), w = await fh.createWritable();
+    await w.write(JSON.stringify({ md: 1, col: col, id: id, etag: d.etag || null, itemId: d.itemId || null, data: d.data })); await w.close();
+  }
+  async function mirFlush() {
+    if (mirBusy || !mirOn()) return; var keys = Object.keys(mirQ); if (!keys.length) return;
+    if ((await mirPerm(false)) !== 'granted') { mirErr = 'needs permission'; return; }
+    mirBusy = true; var h = await mirHandle();
+    try {
+      for (var i = 0; i < keys.length; i++) { var k = keys[i], ix = k.indexOf('/'); delete mirQ[k]; await mirWriteOne(h, k.slice(0, ix), k.slice(ix + 1)); }
+      var inf = mirInfo() || {}; inf.at = Date.now(); inf.name = h.name; lset('md.mir', JSON.stringify(inf)); mirErr = '';
+    } catch (e) { mirErr = 'could not write (' + (e && e.message || 'error') + ')'; }
+    mirBusy = false; if (Object.keys(mirQ).length) { clearTimeout(mirTimer); mirTimer = setTimeout(mirFlush, 3000); }
+  }
+  function mirAll() { if (!mirOn()) return; COLS.forEach(function (c) { Object.keys(mem[c]).forEach(function (id) { mirQ[c + '/' + id] = 1; }); }); clearTimeout(mirTimer); mirTimer = setTimeout(mirFlush, 200); }
+  async function mirRead(h) {
+    var out = { docs: 0 };
+    for (var ci = 0; ci < COLS.length; ci++) {
+      var col = COLS[ci], sub = await mirSub(h, col, false); if (!sub) continue;
+      for await (var ent of sub.values()) {
+        if (ent.kind !== 'file' || !/\.json$/.test(ent.name)) continue;
+        try {
+          var f = await ent.getFile(), j = JSON.parse(await f.text());
+          if (!j || j.md !== 1 || !j.data) continue;
+          var id = j.id || ent.name.slice(0, -5);
+          if (mem[col][id] || dirty[col + '/' + id]) continue;
+          mem[col][id] = { data: j.data, etag: j.etag || null, itemId: j.itemId || null }; idbPut('docs', { k: col + '/' + id, col: col, id: id, data: j.data, etag: j.etag || null, itemId: j.itemId || null });
+          out.docs++;
+        } catch (e) {}
+      }
+    }
+    return out;
+  }
+  /* Loads the local copy into the app when the device has nothing yet. Only for the same Microsoft account that made the copy. */
+  async function mirLoad(why, interactive) {
+    var inf = mirInfo(); if (!inf) return false;
+    if (inf.mail && mirMail() && inf.mail !== mirMail()) return false;
+    var p = await mirPerm(!!interactive);
+    if (p === 'none') return false;
+    if (p !== 'granted') { mirAsk(why); return false; }
+    var h = await mirHandle(); try { var r = await mirRead(h); } catch (e) { mirErr = 'could not read'; return false; }
+    if (r.docs) { mirLoaded = true; COLS.forEach(notify); toast('Loaded ' + r.docs + ' record' + (r.docs > 1 ? 's' : '') + ' from the local copy in "' + h.name + '"' + (why ? ' because ' + why : '') + '.'); odBanner(); return true; }
+    return false;
+  }
+  function mirAsk(why) {
+    if ($('mirAsk')) return;
+    var b = document.createElement('div'); b.id = 'mirAsk';
+    b.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:320;background:#101C26;color:#fff;padding:12px 16px;border-radius:12px;font:14px system-ui,sans-serif;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:min(560px,94vw)';
+    b.innerHTML = '<span>' + esc((why ? why.charAt(0).toUpperCase() + why.slice(1) + '. ' : '') + 'Your clients can be loaded from the local copy on this computer.') + '</span><button class="btn" id="mirAskGo" style="white-space:nowrap">Load local copy</button><button class="btn ghost sm" id="mirAskNo" style="color:#fff">Not now</button>';
+    document.body.appendChild(b);
+    $('mirAskGo').onclick = async function () { b.remove(); var pp = $('mirPerm'); if (pp) pp.remove(); var ok = await mirLoad(why, true); if (ok) mirAll(); if (!ok && (await mirPerm(false)) === 'granted') toast('The local copy has no records that are not already here.'); };
+    $('mirAskNo').onclick = function () { b.remove(); };
+  }
+  async function mirStart() {
+    if (!mirOn()) return;
+    var p = await mirPerm(false);
+    if (p === 'granted') { if (Object.keys(mem.cases).length) mirAll(); }
+    else if (p === 'prompt') {
+      if ($('mirAsk') || $('mirPerm')) return;
+      /* Chrome asks once per session: ask with a user click so the copy keeps being written. */
+      var b = document.createElement('div'); b.id = 'mirPerm';
+      b.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:320;background:#101C26;color:#fff;padding:12px 16px;border-radius:12px;font:14px system-ui,sans-serif;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:min(560px,94vw)';
+      b.innerHTML = '<span>Allow the app to keep the local copy of your clients up to date in "' + esc((mirInfo() || {}).name || 'your folder') + '"?</span><button class="btn" id="mirPermGo" style="white-space:nowrap">Allow</button><button class="btn ghost sm" id="mirPermNo" style="color:#fff">Not now</button>';
+      document.body.appendChild(b);
+      $('mirPermGo').onclick = async function () { b.remove(); if ((await mirPerm(true)) === 'granted') { mirAll(); toast('Local copy is on.'); } };
+      $('mirPermNo').onclick = function () { b.remove(); };
+    }
+  }
+  async function openLocalCopy() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:250;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(ov);
+    async function draw(msg) {
+      var inf = mirInfo(), h = await mirHandle(), p = h ? await mirPerm(false) : 'none', n = 0; COLS.forEach(function (c) { n += Object.keys(mem[c]).length; });
+      ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">Local copy</h2><button class="btn ghost" data-m="close">Close</button></div>' +
+        '<p style="margin:12px 0;color:#58697A">Keeps an identical copy of every client record in a folder on this computer, updated as you work. If OneDrive is slow or down when the app opens, your clients load from this folder instead. It is a safety net, not a backup for other people: keep it on this computer (for example in Documents), ideally with BitLocker or FileVault on. It is not password-protected. Works in Chrome and Edge on a computer.</p>' +
+        (bkCanPick() ? (inf && h ? '<p style="margin:8px 0"><b>Folder:</b> ' + esc(h.name) + ' &middot; ' + (p === 'granted' ? '<span style="color:#1b5e20">allowed</span>' : '<span style="color:#8A5A00">needs permission this session</span>') + (inf.at ? ' &middot; last written ' + new Date(inf.at).toLocaleString('en-GB') : '') + (mirErr ? ' &middot; <span style="color:#A3261F">' + esc(mirErr) + '</span>' : '') + '</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (p !== 'granted' ? '<button class="btn" data-m="allow">Allow access</button>' : '<button class="btn" data-m="write">Write all ' + n + ' records now</button>') + '<button class="btn ghost" data-m="pick">Change folder</button><button class="btn ghost" data-m="off">Turn off</button></div>'
+          : '<p style="margin:8px 0;color:#58697A">No folder chosen yet.</p><button class="btn" data-m="pick">Choose a folder on this computer</button>')
+          : '<p style="margin:8px 0;color:#58697A">This browser cannot keep a folder on this device (phones, Safari and Firefox). Use Chrome or Edge on a computer for this feature.</p>') +
+        '<p id="mirMsg" style="min-height:18px;margin:10px 0 0">' + esc(msg || '') + '</p></div>';
+    }
+    await draw();
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+    ov.addEventListener('click', async function (e) {
+      var el = e.target.closest && e.target.closest('[data-m]'); if (!el) return; var a = el.getAttribute('data-m');
+      if (a === 'close') ov.remove();
+      else if (a === 'pick') {
+        try { var h = await window.showDirectoryPicker({ mode: 'readwrite' }); mirH = h; await bkPutDir('mirror', h); lset('md.mir', JSON.stringify({ name: h.name, mail: mirMail(), at: 0 })); mirAll(); await draw('Folder chosen. Writing the records now.'); }
+        catch (x) { if (!x || x.name !== 'AbortError') await draw('Could not use that folder.'); }
+      } else if (a === 'allow') { if ((await mirPerm(true)) === 'granted') { mirAll(); await draw('Allowed. Writing the records now.'); } else await draw('Permission was not given.'); }
+      else if (a === 'write') { mirAll(); await draw('Writing all records now.'); }
+      else if (a === 'off') { if (!confirm('Turn off the local copy? The files already in the folder are left as they are; you can delete the folder yourself.')) return; await bkPutDir('mirror', null); mirH = null; lset('md.mir', null); await draw('Local copy is off.'); }
+    });
+  }
+
   async function bkPerm(slot, interactive) {
     var h = await bkGetDir(slot); if (!h) return { none: true };
     var p = 'prompt'; try { p = await h.queryPermission({ mode: 'readwrite' }); } catch (e) {}
@@ -1020,6 +1163,7 @@
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">My profile</h3><p style="margin:0 0 8px;color:#58697A">' + (profGet().name ? esc(profGet().name) + (profGet().biz ? ' &middot; ' + esc(profGet().biz) : '') : 'Add your name, business, mobile number and email.') + '</p><button class="btn" data-a="profile">' + (profGet().name || profGet().phone ? 'Edit profile' : 'Set up profile') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Local copy (if OneDrive is slow or down)</h3><p style="margin:0 0 8px;color:#58697A">' + (mirOn() ? 'On: identical copy kept in the folder "' + esc((mirInfo() || {}).name || '') + '" on this computer.' : 'Keep an identical copy of your client records in a folder on this computer, so they still load when OneDrive is not responding.') + '</p><button class="btn" data-a="mirror">' + (mirOn() ? 'Local copy settings' : 'Set up local copy') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Invoices</h3><p style="margin:0 0 8px;color:#58697A">' + (invGet().accounts.length ? invGet().accounts.length + ' bank account' + (invGet().accounts.length === 1 ? '' : 's') + ' saved, next invoice number ' + esc(invGet().next || 1) + '.' : 'Add the bank details and numbering printed on your fee invoices.') + '</p><button class="btn" data-a="invoice">' + (invGet().payee ? 'Edit invoice details' : 'Set up invoice details') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">PDF/CSV Case Backup</h3><p style="margin:0 0 8px;color:#58697A">Saves all cases as a password-protected ZIP (PDF and CSV) to the folders you choose, with an automatic backup every 24 hours.</p><button class="btn" data-a="pdfbk" style="background:#2f4a40;border-color:#2f4a40;color:#fff">PDF/CSV Case Backup</button>' +
@@ -1063,6 +1207,7 @@
       else if (a === 'pdfbk') { ov.remove(); openBackup(); }
       else if (a === 'profile') { ov.remove(); openProfile(); }
       else if (a === 'invoice') { ov.remove(); openInvoiceSettings(); }
+      else if (a === 'mirror') { ov.remove(); openLocalCopy(); }
       else if (a === 'pin') { if (pinData() && !reGate('pin')) return; ov.remove(); openPin(); }
       else if (a === 'guide') { e.preventDefault(); openGuide(); }
       else if (a === 'out') { ov.remove(); signOut(); }
@@ -1090,14 +1235,18 @@
   function markAct() { if (locked) return; try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
   function lastAct() { var v = 0; try { v = +localStorage.getItem('md.act') || 0; } catch (e) {} return v || Date.now(); }
   function isIdle() { return Date.now() - lastAct() >= IDLE_MS; }
-  async function autoSignOut() {
+  async function autoSignOut(force) {
     if (pending()) { try { await flush(); } catch (e) {} }
+    if (!force && !locked && (navigator.onLine === false || st.offline)) {
+      /* OneDrive cannot be reached, so a fresh sign-in would not work: keep the copy on this device and lock the screen instead. */
+      if (pinData()) { lockNow(); toast('You were away for ' + idleLabel() + ' and OneDrive is not reachable, so the screen was locked instead of signing out.'); return false; }
+    }
     if (pending()) {
       setTok(null);
       showSignIn('You were signed out after ' + idleLabel() + ' of inactivity. Changes not yet saved to OneDrive are kept on this device and upload when you sign in.');
-      return;
+      return true;
     }
-    await wipeAndReload(true);
+    await wipeAndReload(true); return true;
   }
 
   /* ---------- PIN screen lock (auto-locks after 15 minutes with no activity, only when a PIN is set) ---------- */
@@ -1136,7 +1285,7 @@
       var ok = false; try { ok = await pinCheck(v); } catch (x) { ok = false; }
       if (ok) { unlock(); return; }
       pinFails++; inp.value = '';
-      if (pinFails >= 5) { msg.textContent = 'Too many wrong attempts. Logging out…'; autoSignOut(); return; }
+      if (pinFails >= 5) { msg.textContent = 'Too many wrong attempts. Logging out…'; autoSignOut(true); return; }
       msg.textContent = 'Wrong PIN. ' + (5 - pinFails) + ' attempt' + (5 - pinFails === 1 ? '' : 's') + ' left.'; inp.focus();
     });
     $('mdLockOut').addEventListener('click', function () { signOut(); });
@@ -1310,14 +1459,16 @@
     await openIdb(); await loadCache();
     try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
     if (!tok()) { showSignIn(''); return; }
-    if (isIdle()) { await autoSignOut(); return; }
+    if (isIdle()) { if (await autoSignOut()) return; }
     startIdleWatch(); startLockWatch(); setTimeout(pinWarnMaybe, 2500);
     migrateToAppFolder();
+    if (!Object.keys(mem.cases).length && mirOn()) { try { await mirLoad('this device had no copy yet'); } catch (e) {} }
     var o = $('mdSign'); if (o) o.remove();
     readyRes({ collection: collection });
+    setTimeout(mirStart, 4000);
     setState();
     flush(); pull();
-    subs.appointments.push(function () { calSchedule(2000); }); calSchedule(5000); bkStart();
+    subs.appointments.push(function () { calSchedule(2000); }); subs.cases.push(function () { calSchedule(8000); }); calSchedule(5000); bkStart();
     var ro = ls('md.reopen'); if (ro) { lset('md.reopen', null); setTimeout(function () { toast('Confirmed. You can now make your changes.'); if (ro === 'profile') openProfile(); else if (ro === 'backup') openBackup(); else if (ro === 'pin') openPin(); else if (ro === 'invoice') openInvoiceSettings(); }, 1800); }
     var cn = ls('md.calnote'); if (cn) { lset('md.calnote', null); setTimeout(function () { toast(cn); }, 1500); }
     setInterval(function () { if (document.visibilityState === 'visible') { flush(); pull(); calSchedule(3000); } }, 60000);
