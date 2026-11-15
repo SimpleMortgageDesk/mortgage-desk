@@ -935,7 +935,7 @@
     var work = null;
     function draw(msg) {
       var v = invGet(), have = v.accounts.length > 0, lk = have && !reFresh() && !work, dis = lk ? ' disabled' : '';
-      var accs = work || v.accounts.slice(); if (!accs.length) accs = [{ id: 'a' + Date.now(), label: '', payee: '', sort: '', acct: '' }];
+      var accs = (work ? work.accounts : v.accounts).slice(); if (!accs.length) accs = [{ id: 'a' + Date.now(), label: '', payee: '', sort: '', acct: '' }];
       var def = (work && work.def) || v.def || accs[0].id;
       var blocks = accs.map(function (a, i) {
         return '<div style="border:1px solid #D4DBDF;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Account ' + (i + 1) + '</b><label style="font-size:13px"><input type="radio" name="ivDef" data-acc="' + i + '"' + (a.id === def ? ' checked' : '') + dis + '> Default</label></div>' +
