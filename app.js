@@ -39,7 +39,8 @@ function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
 var PROP_TYPES=[['','Not set'],['main','Main residence'],['btl','Buy to let'],['second','Second home'],['holiday','Holiday home']];
 function propLabel(v){var o=PROP_TYPES.filter(function(q){return q[0]===v})[0];return o&&o[0]?o[1]:''}
-function propTag(c){var l=propLabel(c.propUse);return l?' <span class="ptag '+esc(c.propUse)+'">'+esc(l)+'</span>':''}
+function spvTag(c){return c.borrowerType==='spv'?' <span class="ptag spv" title="'+esc(c.companyName||'Limited company (SPV)')+'">SPV</span>':''}
+function propTag(c){var l=propLabel(c.propUse);return spvTag(c)+(l?' <span class="ptag '+esc(c.propUse)+'">'+esc(l)+'</span>':'')}
 /* Same client = same applicant names and dates of birth (any order). A joint case with a different second person is a different client. */
 function clientKey(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim().toLowerCase().replace(/\s+/g,' ')+'|'+(x.dob||'')}).filter(function(s){return s!=='|'});return a.length?a.sort().join('||'):'#'+c.id}
 function sameClient(c){var k=clientKey(c);return cases.filter(function(x){return clientKey(x)===k}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)})}
@@ -441,9 +442,58 @@ function pickClient(){
   return '<label class="f" style="margin-bottom:12px">Start from an existing client (copies their details)<select id="fromClient"><option value="">Choose a client, or leave blank for a new one</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(names(x)+(x.clientNo?' ('+x.clientNo+')':''))+'</option>'}).join('')+'</select></label>';
 }
 var pendingSecMove=null;
+function borrowerFs(c){
+  var spv=c.borrowerType==='spv';
+  return '<fieldset><legend>Applying as</legend><div class="grid">'+sel('borrowerType','Borrower',spv?'spv':'personal',[['personal','Personal name'],['spv','Limited company (SPV)']])+
+    '<span class="spvf" style="display:contents"'+(spv?'':' hidden')+'>'+fld('companyName','Company name',c.companyName)+fld('companyNumber','Company number',c.companyNumber)+'</span></div></fieldset>';
+}
+document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='f-borrowerType'){var f=document.querySelectorAll('#caseForm .spvf');f.forEach(function(s){s.hidden=x.value!=='spv'})}});
+function startExisting(src,type){
+  var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
+  var d={stage:'enquiry',type:TYPES.indexOf(type)>-1?type:'Purchase',repayment:'repayment',applicants:ap,propertyAddress:'',oneDriveLink:src.oneDriveLink||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,_fromCase:1,notes:[{ts:Date.now(),text:'New case for an existing client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+' · '+(TYPES.indexOf(type)>-1?type:'Purchase')+'.'}]};
+  pendingSecMove=null;closeDrawer();openDrawer(null,d);
+}
+function openNewChooser(){
+  var old=document.getElementById('ncOv');if(old)old.remove();
+  var seen={},list=[];
+  cases.slice().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)}).forEach(function(c){var k=clientKey(c);if(seen[k])return;seen[k]=1;list.push(c)});
+  list.sort(function(a,b){return names(a).toLowerCase()<names(b).toLowerCase()?-1:1});
+  var ov=document.createElement('div');ov.id='ncOv';
+  ov.style.cssText='position:fixed;inset:0;z-index:260;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="New case" style="background:var(--card,#fff);color:var(--ink,#101C26);width:min(560px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h2 style="margin:0;font-size:20px">New case</h2><button type="button" class="btn ghost" id="ncX">Cancel</button></div>'+
+    '<button type="button" class="btn" id="ncNew" style="width:100%;margin-bottom:14px">New client</button>'+
+    '<div style="border-top:1px solid var(--line,#D4DBDF);padding-top:12px"><b>Or a new case for an existing client</b><div class="muted" style="font-size:13px;margin:2px 0 8px">Copies their names, contact details and OneDrive link. The new case starts at Enquiry.</div>'+
+    '<label class="f" style="margin-bottom:8px">Case type<select id="ncType">'+TYPES.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')+'</select></label>'+
+    '<input id="ncQ" type="search" placeholder="Search by name or client number" aria-label="Search clients" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line,#D4DBDF);border-radius:8px;font:inherit;margin-bottom:8px"></div>'+
+    '<div id="ncList" style="overflow:auto;border:1px solid var(--line,#D4DBDF);border-radius:8px;min-height:80px"></div></div>';
+  document.body.appendChild(ov);
+  function draw(){
+    var q=(document.getElementById('ncQ').value||'').trim().toLowerCase(),n=0,h='';
+    list.forEach(function(c){
+      var label=names(c)+(c.clientNo?' ('+c.clientNo+')':'');
+      if(q&&label.toLowerCase().indexOf(q)<0&&names(c).toLowerCase().indexOf(q)<0)return;
+      if(++n>60)return;
+      var k=sameClient(c).length;
+      h+='<button type="button" data-ncpick="'+esc(c.id)+'" style="display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line,#E5EAED);padding:10px 12px;font:inherit;color:inherit;cursor:pointer"><span>'+esc(label)+'</span><span class="muted" style="font-size:12px;white-space:nowrap">'+k+' case'+(k===1?'':'s')+'</span></button>';
+    });
+    document.getElementById('ncList').innerHTML=h||'<div class="muted" style="padding:14px">No client matches.</div>';
+  }
+  draw();
+  ov.addEventListener('input',function(e){if(e.target.id==='ncQ')draw()});
+  ov.addEventListener('mousedown',function(e){if(e.target===ov)ov.remove()});
+  ov.addEventListener('keydown',function(e){if(e.key==='Escape')ov.remove()});
+  ov.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('button');if(!b)return;
+    if(b.id==='ncX'){ov.remove();return}
+    if(b.id==='ncNew'){ov.remove();openDrawer(null);return}
+    var id=b.getAttribute('data-ncpick');if(id){var src=cases.filter(function(x){return x.id===id})[0],ty=document.getElementById('ncType').value;ov.remove();if(src)startExisting(src,ty)}
+  });
+  setTimeout(function(){var q=document.getElementById('ncQ');if(q)q.focus()},50);
+}
 function startFrom(src,use,addr,secId){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
-  var d={stage:'dip',type:use==='btl'?'Buy to let':'Purchase',repayment:'repayment',applicants:ap,propUse:use||'',propertyAddress:addr||'',oneDriveLink:src.oneDriveLink||'',_from:src.id,notes:[{ts:Date.now(),text:'Another property for the same client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+(propLabel(use)?' · '+propLabel(use):'')+'.'}]};
+  var d={stage:'dip',type:use==='btl'?'Buy to let':'Purchase',repayment:'repayment',applicants:ap,propUse:use||'',propertyAddress:addr||'',oneDriveLink:src.oneDriveLink||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,notes:[{ts:Date.now(),text:'Another property for the same client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+(propLabel(use)?' · '+propLabel(use):'')+'.'}]};
   pendingSecMove=secId?{cid:src.id,sid:secId}:null;
   closeDrawer();openDrawer(null,d);
 }
@@ -456,11 +506,11 @@ function openDrawer(id,draft){
   var l=ltv(c);
   var d=$('#drawer');d.hidden=false;
   d.innerHTML='<div class="bk" data-close></div><div class="panel" role="dialog" aria-modal="true" aria-label="Case">'+
-  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?'New property for an existing client. Add the property and mortgage details; it saves automatically':draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2></div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
+  '<div class="dh"><div style="min-width:0"><div class="eyebrow">'+(id?'Case':draft&&draft._from?(draft._fromCase?'New case for an existing client. Check the details; it saves automatically':'New property for an existing client. Add the property and mortgage details; it saves automatically'):draft?'New case from PDF. Check the details, then save':'New case')+'</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 id="dTitle" style="margin:0">'+esc(id?names(c):'Add a client')+'</h2></div>'+(id?'<div id="nextAppt" class="muted" style="font-size:12px;margin-top:4px">'+apNextHtml(id)+'</div>':'')+(id&&c.oneDriveLink?'<div class="pl" style="margin-top:4px">'+odLink(c.oneDriveLink)+'</div>':'')+
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property record">Add new property</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   (!id&&!draft?pickClient():'')+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
+   (!id&&!draft?pickClient():'')+borrowerFs(c)+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
    propsFs(c,id)+
    secFs('lender','Lender')+
      sel('propUse','Property type',c.propUse,PROP_TYPES)+
@@ -1623,7 +1673,7 @@ document.addEventListener('click',function(e){
   if(t.closest&&t.closest('[data-sideacct]')){var sb=document.getElementById('settingsBtn');if(sb)sb.click();return}
   var nv=t.closest('#nav button,#nav2 button,#sideTools button[data-v]');
   if(nv){nbFlush();view=nv.dataset.v;render();return}
-  if(t.closest('#newBtn')||t.closest('[data-act="new"]')){openDrawer(null);return}
+  if(t.closest('#newBtn')||t.closest('[data-act="new"]')){if(cases.length)openNewChooser();else openDrawer(null);return}
   if(t.closest('#pdfBtn')||t.closest('[data-act="pdf"]')){$('#pdfIn').click();return}
   if(t.closest('[data-act="export"]')){exportCsv();return}
   if(t.closest('#backupBtn')){backupAll();return}
@@ -1884,11 +1934,12 @@ function pdfText(file){
 var DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
 function cleanDraft(r){
   var d={},numKeys=['purchasePrice','propertyValue','loanAmount','termYears','rate','followOnRate','monthlyPayment','dipAmount'];
-  var strKeys=['propertyAddress','lender','lenderRef','product','erc','conveyancer','estateAgent'];
+  var strKeys=['propertyAddress','lender','lenderRef','product','erc','conveyancer','estateAgent','companyName','companyNumber'];
   var dateKeys=['fixedUntil','reviewDate','dipDate','dipExpiry','appDate','offerDate','offerExpiry','completionDate'];
   strKeys.forEach(function(k){if(typeof r[k]==='string'&&r[k].trim())d[k]=r[k].trim()});
   numKeys.forEach(function(k){var n=num(r[k]);if(n!=null)d[k]=n});
   dateKeys.forEach(function(k){if(typeof r[k]==='string'&&DATE_RE.test(r[k]))d[k]=r[k]});
+  d.borrowerType=r.borrowerType==='spv'||(d.companyName&&r.borrowerType!=='personal')?'spv':'personal';
   d.stage=stageIdx(r.stage)>-1?r.stage:'enquiry';
   d.type=TYPES.indexOf(r.type)>-1?r.type:'Purchase';
   d.repayment=['repayment','interest-only','part-and-part'].indexOf(r.repayment)>-1?r.repayment:'repayment';
@@ -1922,6 +1973,7 @@ function importPdfs(files){
     '- lender, lenderRef (roll number or application reference), product (product code or name), rate (initial rate, percent as a number), fixedUntil (YYYY-MM-DD, end of initial rate period), followOnRate (rate after the initial period, percent), monthlyPayment (regular monthly payment during the initial period, not a one-off first payment), erc (early repayment charge summary as short text).\n'+
     '- dipDate, dipExpiry, dipAmount (maximum amount in a DIP), appDate, offerDate, offerExpiry, completionDate. Dates as YYYY-MM-DD. Use the letter date as dipDate or offerDate for the matching document.\n'+
     '- conveyancer (name and address if given), estateAgent.\n'+
+    '- borrowerType: "spv" if the borrower is a limited company or SPV, otherwise "personal". companyName and companyNumber (Companies House number) only for a limited company.\n'+
     '- summary: one or two sentences noting anything an adviser should watch, such as term warnings, valuation basis or conditions.\n'+
     'All money values are plain numbers in pounds with no symbols.\n\nDOCUMENTS:\n'+texts.join('\n\n').slice(0,90000);
     return sample.json(prompt,{modelTier:'default'});

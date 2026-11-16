@@ -548,7 +548,7 @@ body.apdragging,body.apdragging *{cursor:grabbing!important;user-select:none!imp
 :root[data-theme="dark"] .ntsug{background:#3d3410;border-color:#8a7200}:root[data-theme="dark"] .ntsug .sgi{border-top-color:#6b5a1a}
 
 .ptag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:0 6px;margin-left:4px;background:#e3f2fd;color:#0d47a1;vertical-align:middle}
-.ptag.main{background:#e8f5e9;color:#1b5e20}.ptag.btl{background:#fff3e0;color:#e65100}.ptag.second{background:#f3e5f5;color:#4a148c}.ptag.holiday{background:#e0f7fa;color:#006064}
+.ptag.spv{background:#ede7f6;color:#4527a0}.ptag.main{background:#e8f5e9;color:#1b5e20}.ptag.btl{background:#fff3e0;color:#e65100}.ptag.second{background:#f3e5f5;color:#4a148c}.ptag.holiday{background:#e0f7fa;color:#006064}
 tr.cg td{background:var(--bg);border-top:2px solid var(--line);padding:8px 12px;font-size:13px}
 tr.ing td:first-child{padding-left:26px}
 .proplist{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
