@@ -29,12 +29,23 @@ var protHidden=false,protAll=false,prDraft='';
 function protFs(c){
   var ps=(c.protection||[]).slice().sort(function(a,b){return b.ts-a.ts});
   return '<fieldset style="margin-top:14px"><legend>Protection notes ('+ps.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="prHide">'+(protHidden?'Show protection':'Hide protection')+'</button></div>'+
-  (protHidden?'<span class="muted">Protection notes hidden.</span>':'<label class="f">New protection note<textarea id="prText" rows="3" placeholder="Life cover, critical illness, income protection, buildings and contents: provider, cover, premium, review date">'+esc(prDraft)+'</textarea></label><div id="prTblBox">'+pendHtml('pr')+'</div><div class="add"><button type="button" class="btn ghost" id="prStamp">Insert date and time</button><button type="button" class="btn ghost" id="prAdd">Add note</button></div>'+
+  (protHidden?'<span class="muted">Protection notes hidden.</span>':'<label class="f">New protection note<textarea id="prText" rows="3" placeholder="Life cover, critical illness, income protection, buildings and contents: provider, cover, premium, review date">'+esc(prDraft)+'</textarea></label><div id="prTblBox">'+pendHtml('pr')+'</div><div class="add"><button type="button" class="btn ghost" id="prStamp">Insert date and time</button><button type="button" class="btn ghost" id="prTbl" title="Add a blank table to this note">Insert table</button><button type="button" class="btn ghost" id="prAdd">Add note</button></div>'+
   (protAll?ps:ps.slice(0,1)).map(function(n){return noteItem(n,'protection',(protAll||ps.length<2?'':' (latest)'),esc)}).join('')+
   (ps.length>1?'<button type="button" class="btn ghost sm" id="prAll">'+(protAll?'Show latest only':'Show all '+ps.length+' protection notes')+'</button>':''))+'</fieldset>';
 }
 function latestNoteCell(c,key){var n=(c[key||'notes']||[]).slice().sort(function(a,b){return b.ts-a.ts})[0];if(!n)return '<span class="muted">—</span>';var t=String(n.text||'');if(!t&&n.table)t='[Table]';if(t.length>140)t=t.slice(0,140)+'…';t=t.replace(/\s+/g,' ');return '<div class="nl1" title="'+esc(stampOf(n.ts)+' '+t)+'"><span class="muted" style="font-family:var(--mono);font-size:11px">'+stampOf(n.ts)+'</span> '+esc(t)+'</div>'}
 function cno(c){return c.clientNo?' <span class="cno">'+esc(c.clientNo)+'</span>':''}
+function noFor(c){if(c.clientNo)return c.clientNo;var s=sameClient(c).filter(function(x){return x.clientNo&&x.id!==c.id})[0];return s?s.clientNo:nextClientNo()}
+var fillBusy=false;
+function fillClientNos(){
+  if(fillBusy||!col||!cases.length||!window.mdSettled||!window.mdSettled())return;
+  var miss=cases.filter(function(c){return !c.clientNo}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});if(!miss.length)return;
+  fillBusy=true;var done=[],local=cases.map(function(c){return {id:c.id,clientNo:c.clientNo,applicants:c.applicants}});
+  function nextLocal(){var m=0;local.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
+  miss.forEach(function(c){var k=clientKey(c),sib=local.filter(function(x){return x.clientNo&&clientKey(x)===k})[0],no=sib?sib.clientNo:nextLocal();local.filter(function(x){return x.id===c.id})[0].clientNo=no;done.push(patch(c.id,{clientNo:no}))});
+  Promise.all(done).then(function(){fillBusy=false},function(){fillBusy=false});
+}
+setInterval(fillClientNos,8000);
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
 function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
 var PROP_TYPES=[['','Not set'],['main','Main residence'],['btl','Buy to let'],['second','Second home'],['holiday','Holiday home']];
@@ -54,6 +65,7 @@ function cnum(c){var m=/(\d+)/.exec(c.clientNo||'');return m?+m[1]:1e9}
 function odLink(u){u=String(u||'').trim();return /^https?:\/\//i.test(u)?'<a href="'+esc(u)+'" target="_blank" rel="noopener">Open OneDrive folder</a>':''}
 /* ---------- pasted tables: Excel colours kept, cells editable ---------- */
 var ntTable=null,prTable=null,tblTimer=null;
+function blankTbl(){var rows=[];for(var r=0;r<4;r++){var row=[];for(var c=0;c<3;c++)row.push(r===0?{v:'',b:1,bg:'#e8eef3'}:{v:''});rows.push(row)}return {rows:rows}}
 function safeColor(v){v=String(v||'').trim();return /^#[0-9a-fA-F]{6}$/.test(v)?v:''}
 function rgbHex(s){var m=/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s\/]+([\d.]+))?/.exec(s||'');if(!m)return '';if(m[4]!=null&&+m[4]===0)return '';return '#'+[m[1],m[2],m[3]].map(function(x){return ('0'+Math.min(255,+x).toString(16)).slice(-2)}).join('')}
 function lum(h){return (0.299*parseInt(h.substr(1,2),16)+0.587*parseInt(h.substr(3,2),16)+0.114*parseInt(h.substr(5,2),16))/255}
@@ -305,16 +317,16 @@ function casesHTML(){
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+lenderSelHTML()+revSelHTML()+'<details class="colpick"><summary class="btn ghost">Columns</summary><div class="colbox">'+CASE_COLS.map(function(c){return '<label><input type="checkbox" data-colk="'+c[0]+'"'+(colOn(c[0])?' checked':'')+'> '+c[1]+'</label>'}).join('')+'</div></details>'+((stageFilter||lenderFilter||revFilter)?' <button type="button" class="btn ghost" data-clrf="1">Clear filters</button>':'')+'</div>';
   if(!cases.length)return h+emptyHTML();
   h+='<div class="stlegend" aria-label="Colour key">'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<span class="stl st-'+s.id+'">'+s.label+'</span>'}).join('')+'<span class="stlnote"><i class="rbar red"></i> review or rate end within 30 days or overdue <i class="rbar amb"></i> within 90 days</span></div>'+
-  '<div class="tw"><table><thead><tr><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
-  if(!list.length)h+='<tr><td colspan="8" class="muted">No cases match.</td></tr>';
+  '<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
+  if(!list.length)h+='<tr><td colspan="9" class="muted">No cases match.</td></tr>';
   var grp={};list.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});var done={};
   list.forEach(function(c0){
     var k0=clientKey(c0),g=grp[k0];if(done[k0])return;done[k0]=1;
-    if(g.length>1)h+='<tr class="cg"><td colspan="8"><b>'+esc(names(c0))+'</b> <span class="muted">· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
+    if(g.length>1)h+='<tr class="cg"><td colspan="9"><b>'+esc(names(c0))+'</b> <span class="muted">· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
     g.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
     var rv=reviewOf(c),rd=rv?diff(rv):9999,rcl=rd<=30?' rend-red':rd<=90?' rend-amb':'';
-    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td><b>'+esc(names(c))+'</b>'+cno(c)+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
+    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td class="cnocol">'+esc(c.clientNo||'')+'</td><td><b>'+esc(names(c))+'</b><div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
       (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
       (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
       (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
@@ -450,7 +462,7 @@ function borrowerFs(c){
 document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='f-borrowerType'){var f=document.querySelectorAll('#caseForm .spvf');f.forEach(function(s){s.hidden=x.value!=='spv'})}});
 function startExisting(src,type){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
-  var d={stage:'enquiry',type:TYPES.indexOf(type)>-1?type:'Purchase',repayment:'repayment',applicants:ap,propertyAddress:'',oneDriveLink:src.oneDriveLink||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,_fromCase:1,notes:[{ts:Date.now(),text:'New case for an existing client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+' · '+(TYPES.indexOf(type)>-1?type:'Purchase')+'.'}]};
+  var d={stage:'enquiry',type:TYPES.indexOf(type)>-1?type:'Purchase',repayment:'repayment',applicants:ap,propertyAddress:'',oneDriveLink:src.oneDriveLink||'',clientNo:src.clientNo||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,_fromCase:1,notes:[{ts:Date.now(),text:'New case for an existing client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+' · '+(TYPES.indexOf(type)>-1?type:'Purchase')+'.'}]};
   pendingSecMove=null;closeDrawer();openDrawer(null,d);
 }
 function openNewChooser(){
@@ -493,7 +505,7 @@ function openNewChooser(){
 }
 function startFrom(src,use,addr,secId){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
-  var d={stage:'dip',type:use==='btl'?'Buy to let':'Purchase',repayment:'repayment',applicants:ap,propUse:use||'',propertyAddress:addr||'',oneDriveLink:src.oneDriveLink||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,notes:[{ts:Date.now(),text:'Another property for the same client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+(propLabel(use)?' · '+propLabel(use):'')+'.'}]};
+  var d={stage:'dip',type:use==='btl'?'Buy to let':'Purchase',repayment:'repayment',applicants:ap,propUse:use||'',propertyAddress:addr||'',oneDriveLink:src.oneDriveLink||'',clientNo:src.clientNo||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,notes:[{ts:Date.now(),text:'Another property for the same client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+(propLabel(use)?' · '+propLabel(use):'')+'.'}]};
   pendingSecMove=secId?{cid:src.id,sid:secId}:null;
   closeDrawer();openDrawer(null,d);
 }
@@ -1374,7 +1386,7 @@ function renderLive(){
     '<div class="add"><input type="text" id="tkText" placeholder="Add a task, e.g. chase conveyancer" aria-label="New task"><input type="date" id="tkDue" aria-label="Due date"><input type="time" id="tkTime" aria-label="Time"><label class="prichk"><input type="checkbox" id="tkPri"> High priority</label><button type="button" class="btn ghost" id="tkAdd">Add task</button><button type="button" class="btn" id="tkBook">Book appointment</button></div></fieldset>';
   box.innerHTML=protFs(c);
   var nb=$('#liveNotes');if(nb)nb.innerHTML='<div style="margin-bottom:14px">'+tasksHtml+'</div><fieldset><legend>Notes ('+ns.length+')</legend><div class="add" style="margin:0 0 8px"><button type="button" class="btn ghost sm" id="ntHide">'+(notesHidden?'Show notes':'Hide notes')+'</button></div>'+
-    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div class="muted" style="font-size:12px;margin:-4px 0 8px">Do not type NI numbers, bank details, passport numbers, income and expenditure, or health answers here.</div><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+sugHtml()+
+    (notesHidden?'<span class="muted">Notes hidden.</span>':'<label class="f">New note<textarea id="ntText" rows="3" placeholder="File note, call summary, next step. You can also paste a table from Excel">'+esc(ntDraft)+'</textarea></label><div class="muted" style="font-size:12px;margin:-4px 0 8px">Do not type NI numbers, bank details, passport numbers, income and expenditure, or health answers here.</div><div id="ntTblBox">'+pendHtml('nt')+'</div><div class="add"><button type="button" class="btn ghost" id="ntStamp">Insert date and time</button><button type="button" class="btn ghost" id="ntTbl" title="Add a blank table to this note">Insert table</button><button type="button" class="btn ghost" id="ntAdd">Add note</button></div>'+sugHtml()+
     (notesAll?ns:ns.slice(0,1)).map(function(n){return noteItem(n,'notes',(notesAll||ns.length<2?'':' (latest)'),paras)}).join('')+(ns.length>1?'<button type="button" class="btn ghost sm" id="ntAll">'+(notesAll?'Show latest only':'Show all '+ns.length+' notes')+'</button>':''))+'</fieldset>';
   decorateSecs();
 }
@@ -1416,7 +1428,7 @@ function saveCase(){
   var p;
   if(openId){p=patch(openId,data)}
   else{
-    if(!data.clientNo)data.clientNo=nextClientNo();
+    if(!data.clientNo)data.clientNo=noFor(data);
     var ref=col.doc();data.createdAt=Date.now();data.updatedAt=data.createdAt;data.tasks=[];data.notes=pendingNotes;
     p=write(ref.id,function(){return ref.set(data)}).then(function(){openId=ref.id;secMoveDone()});
   }
@@ -1597,7 +1609,7 @@ function nbToolbar(){
   '<select data-rtsel="size" aria-label="Text size"><option value="">Size</option><option value="2">Small</option><option value="3">Normal</option><option value="4">Large</option><option value="5">Larger</option><option value="6">Huge</option></select><span class="sep"></span>'+
   '<label>Text</label>'+tc.map(function(c){return sw('fore',c)}).join('')+'<input type="color" data-rtinput="fore" value="#1565c0" aria-label="Custom text colour"><span class="sep"></span>'+
   '<label>Highlight</label>'+hc.map(function(c){return sw('hilite',c)}).join('')+'<input type="color" data-rtinput="hilite" value="#fff176" aria-label="Custom highlight colour"><button type="button" data-rt="hilite:none" title="Remove highlight">No highlight</button><span class="sep"></span>'+
-  '<button type="button" data-rt="insertUnorderedList" title="Bullet list">• List</button><button type="button" data-rt="insertOrderedList" title="Numbered list">1. List</button><button type="button" data-rt="removeFormat" title="Clear formatting">Clear format</button></div>';
+  '<button type="button" data-rt="insertUnorderedList" title="Bullet list">• List</button><button type="button" data-rt="insertOrderedList" title="Numbered list">1. List</button><button type="button" data-rt="removeFormat" title="Clear formatting">Clear format</button><span class="sep"></span><button type="button" data-nbtbl="1" title="Add a blank table below this note">Insert table</button></div>';
 }
 var nbRange=null;
 document.addEventListener('selectionchange',function(){var sl=window.getSelection(),b=$('#nbBody');if(b&&sl&&sl.rangeCount&&b.contains(sl.anchorNode))nbRange=sl.getRangeAt(0).cloneRange()});
@@ -1829,6 +1841,9 @@ document.addEventListener('click',function(e){
     notesHidden=!notesHidden;try{localStorage.setItem('notesHidden',notesHidden?'1':'0')}catch(e){}
     renderLive();return;
   }
+  if(t.id==='ntTbl'){ntTable=blankTbl();var nb=$('#ntAdd');if(nb)nb.click();return}
+  if(t.id==='prTbl'){prTable=blankTbl();var pb=$('#prAdd');if(pb)pb.click();return}
+  if(t.closest&&t.closest('[data-nbtbl]')){var nn0=notes.filter(function(x){return x.id===nbShown})[0];if(nn0){nbSetTables((nn0.tables||[]).concat([{ts:Date.now(),table:blankTbl()}]));toast('Table added. Click a cell to type; use Add row and Add column under it')}return}
   if(t.id==='ntStamp'){
     var tx=$('#ntText'),st=stampOf(Date.now())+' - ';
     tx.value=tx.value.trim()?tx.value.replace(/\s*$/,'')+'\n'+st:st;tx.focus();tx.setSelectionRange(tx.value.length,tx.value.length);return;
@@ -2005,7 +2020,7 @@ function autoSave(){
       var nd=collectForm();
       if(nd.applicants.length&&JSON.stringify(nd)!==newBase){
         creatingNew=true;
-        if(!nd.clientNo)nd.clientNo=nextClientNo();
+        if(!nd.clientNo)nd.clientNo=noFor(nd);
         var nref=col.doc();nd.createdAt=Date.now();nd.updatedAt=nd.createdAt;nd.tasks=[];nd.notes=pendingNotes;
         write(nref.id,function(){return nref.set(nd)}).then(function(){
           creatingNew=false;secMoveDone();

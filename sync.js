@@ -1021,6 +1021,7 @@
     it.push({ t: 'THANK YOU', b: 1, sz: 11 });
     return pdfBuild(it, (f.biz || f.name || 'Invoice') + '  |  Invoice ' + (inv.no || ''));
   }
+  window.mdSettled = function () { return !!firstPullDone && !pulling && !st.busy && !st.offline && !Object.keys(dirty).length && !!tok(); };
   window.mdInvoice = {
     get: invGet,
     settings: openInvoiceSettings,
