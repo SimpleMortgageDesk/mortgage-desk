@@ -78,10 +78,53 @@ function cellStyle(c){
   return s.join(';');
 }
 function cellHtml(c,edit){c=c||{};var st=cellStyle(c);return '<td'+(edit?' contenteditable="true"':'')+(st?' style="'+st+'"':'')+'>'+esc(c.v)+'</td>'}
+function tblCopyHtml(rows){
+  var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});
+  return '<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;border:1px solid #555555;font-family:Arial,sans-serif;font-size:14px">'+rows.map(function(r){var h='';for(var i=0;i<w;i++){var c=r[i]||{v:''};
+    var st='border:1px solid '+(c.bd||'#555555')+';padding:5px 9px;'+(c.bg?'background-color:'+c.bg+';':'')+(c.c?'color:'+c.c+';':'')+(c.b?'font-weight:bold;':'')+(c.i?'font-style:italic;':'')+(c.a?'text-align:'+c.a+';':'');
+    h+='<td style="'+st+'">'+esc(c.v||'')+'</td>'}return '<tr>'+h+'</tr>'}).join('')+'</table>';
+}
+function tblCopyText(rows,aligned){
+  var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});
+  var cells=rows.map(function(r){var a=[];for(var i=0;i<w;i++)a.push(String((r[i]||{}).v||'').replace(/\s+/g,' ').trim());return a});
+  if(!aligned)return cells.map(function(r){return r.join('\t')}).join('\n');
+  var wd=[];for(var i=0;i<w;i++){wd.push(0);cells.forEach(function(r){if(r[i].length>wd[i])wd[i]=r[i].length})}
+  var bar='+'+wd.map(function(n){return new Array(n+3).join('-')}).join('+')+'+';
+  var lines=cells.map(function(r){return '| '+r.map(function(x,i){return x+new Array(wd[i]-x.length+1).join(' ')}).join(' | ')+' |'});
+  var out=[bar];lines.forEach(function(l,i){out.push(l);if(i===0)out.push(bar)});out.push(bar);
+  return '```\n'+out.join('\n')+'\n```';
+}
+function tblTrim(rows){
+  var r=rows.map(function(x){return x.slice()});
+  function empty(c){return !c||!String(c.v||'').trim()}
+  while(r.length>1&&r[r.length-1].every(empty))r.pop();
+  var w=0;r.forEach(function(x){if(x.length>w)w=x.length});
+  while(w>1&&r.every(function(x){return empty(x[w-1])})){r.forEach(function(x){x.length=Math.min(x.length,w-1)});w--}
+  return r;
+}
+function tblCopy(rows,kind){
+  rows=tblTrim(rows);
+  var text=tblCopyText(rows,kind==='wa'),html=kind==='wa'?'':tblCopyHtml(rows);
+  function ok(){toast(kind==='wa'?'Copied. Paste it into WhatsApp':'Table copied. Paste it into your email')}
+  function legacy(){
+    try{
+      if(kind==='wa'){var ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();var r=document.execCommand('copy');ta.remove();if(r)ok();else toast('Could not copy. Select the table and press Ctrl+C');return}
+      var d=document.createElement('div');d.contentEditable='true';d.style.cssText='position:fixed;left:-9999px;top:0';d.innerHTML=html;document.body.appendChild(d);
+      var rg=document.createRange();rg.selectNodeContents(d);var s=window.getSelection();s.removeAllRanges();s.addRange(rg);var r2=document.execCommand('copy');s.removeAllRanges();d.remove();if(r2)ok();else toast('Could not copy. Select the table and press Ctrl+C')
+    }catch(e){toast('Could not copy. Select the table and press Ctrl+C')}
+  }
+  try{
+    if(navigator.clipboard&&window.ClipboardItem){
+      var item={'text/plain':new Blob([text],{type:'text/plain'})};if(html)item['text/html']=new Blob([html],{type:'text/html'});
+      navigator.clipboard.write([new ClipboardItem(item)]).then(ok,legacy);return;
+    }
+  }catch(e){}
+  legacy();
+}
 function tblInner(rows,edit){var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});return rows.map(function(r){var h='';for(var i=0;i<w;i++)h+=cellHtml(r[i],edit);return '<tr>'+h+'</tr>'}).join('')}
 function tblBlock(n,list){
   var tb=n&&n.table;if(!tb||!tb.rows||!tb.rows.length)return '';
-  return '<div class="tblwrap" data-list="'+list+'" data-ts="'+esc(n.ts)+'"><table class="nt xl"><tbody>'+tblInner(tb.rows,true)+'</tbody></table><div class="tblbar"><button type="button" class="btn ghost sm" data-tb="addrow">Add row</button><button type="button" class="btn ghost sm" data-tb="addcol">Add column</button><button type="button" class="btn ghost sm" data-tb="delrow">Remove last row</button><button type="button" class="btn ghost sm" data-tb="delcol">Remove last column</button>'+(list==='nbtables'?'<button type="button" class="btn danger sm" data-tb="nbdel">Remove table</button>':'')+'</div></div>';
+  return '<div class="tblwrap" data-list="'+list+'" data-ts="'+esc(n.ts)+'"><table class="nt xl"><tbody>'+tblInner(tb.rows,true)+'</tbody></table><div class="tblbar"><button type="button" class="btn sm" data-tb="copytbl" title="Copy the table to paste into an email, Word or Excel">Copy table</button><button type="button" class="btn ghost sm" data-tb="copywa" title="Copy as plain text lined up in columns, for WhatsApp or SMS">Copy for WhatsApp</button><button type="button" class="btn ghost sm" data-tb="addrow">Add row</button><button type="button" class="btn ghost sm" data-tb="addcol">Add column</button><button type="button" class="btn ghost sm" data-tb="delrow">Remove last row</button><button type="button" class="btn ghost sm" data-tb="delcol">Remove last column</button>'+(list==='nbtables'?'<button type="button" class="btn danger sm" data-tb="nbdel">Remove table</button>':'')+'</div></div>';
 }
 function pendHtml(k){
   var tb=k==='nt'?ntTable:prTable;if(!tb)return '';
@@ -1811,6 +1854,7 @@ document.addEventListener('click',function(e){
     if(act==='nbdel'){var tw0=tbb.closest('.tblwrap'),i0=tw0&&readRows(tw0);if(!i0)return;nbSetTables(i0.arr.filter(function(x,i){return i!==i0.idx}));return}
     var tw=tbb.closest('.tblwrap'),info=tw&&readRows(tw);if(!info)return;
     var rws=info.rows,wd=rws[0]?rws[0].length:1;
+    if(act==='copytbl'||act==='copywa'){tblCopy(rws,act==='copywa'?'wa':'html');return}
     if(act==='addrow'){var nr=[];for(var q=0;q<wd;q++)nr.push({v:''});rws.push(nr)}
     else if(act==='addcol'){rws.forEach(function(r){r.push({v:''})})}
     else if(act==='delrow'){if(rws.length>1)rws.pop()}
