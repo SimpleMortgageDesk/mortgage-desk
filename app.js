@@ -80,8 +80,8 @@ function cellStyle(c){
 function cellHtml(c,edit){c=c||{};var st=cellStyle(c);return '<td'+(edit?' contenteditable="true"':'')+(st?' style="'+st+'"':'')+'>'+esc(c.v)+'</td>'}
 function tblCopyHtml(rows){
   var w=0;rows.forEach(function(r){if(r.length>w)w=r.length});
-  return '<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;border:1px solid #555555;font-family:Arial,sans-serif;font-size:14px">'+rows.map(function(r){var h='';for(var i=0;i<w;i++){var c=r[i]||{v:''};
-    var st='border:1px solid '+(c.bd||'#555555')+';padding:5px 9px;'+(c.bg?'background-color:'+c.bg+';':'')+(c.c?'color:'+c.c+';':'')+(c.b?'font-weight:bold;':'')+(c.i?'font-style:italic;':'')+(c.a?'text-align:'+c.a+';':'');
+  return '<table border="1" bordercolor="#555555" cellspacing="0" cellpadding="5" style="border-collapse:collapse;border:1px solid #555555;mso-table-lspace:0pt;mso-table-rspace:0pt;font-family:Arial,sans-serif;font-size:14px">'+rows.map(function(r){var h='';for(var i=0;i<w;i++){var c=r[i]||{v:''};
+    var bc=c.bd||'#555555',st='border-top:1px solid '+bc+';border-right:1px solid '+bc+';border-bottom:1px solid '+bc+';border-left:1px solid '+bc+';mso-border-alt:solid '+bc+' .5pt;padding:5px 9px;'+(c.bg?'background-color:'+c.bg+';':'')+(c.c?'color:'+c.c+';':'')+(c.b?'font-weight:bold;':'')+(c.i?'font-style:italic;':'')+(c.a?'text-align:'+c.a+';':'');
     h+='<td style="'+st+'">'+esc(c.v||'')+'</td>'}return '<tr>'+h+'</tr>'}).join('')+'</table>';
 }
 function tblCopyText(rows,aligned){
