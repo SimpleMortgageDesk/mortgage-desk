@@ -515,7 +515,7 @@ function openNewChooser(){
   list.sort(function(a,b){return names(a).toLowerCase()<names(b).toLowerCase()?-1:1});
   var ov=document.createElement('div');ov.id='ncOv';
   ov.style.cssText='position:fixed;inset:0;z-index:260;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
-  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="New case" style="background:var(--card,#fff);color:var(--ink,#101C26);width:min(560px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
+  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="New case" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(560px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h2 style="margin:0;font-size:20px">New case</h2><button type="button" class="btn ghost" id="ncX">Cancel</button></div>'+
     '<button type="button" class="btn" id="ncNew" style="width:100%;margin-bottom:14px">New client</button>'+
     '<div style="border-top:1px solid var(--line,#D4DBDF);padding-top:12px"><b>Or a new case for an existing client</b><div class="muted" style="font-size:13px;margin:2px 0 8px">Copies their names, contact details and OneDrive link. The new case starts at Enquiry.</div>'+
@@ -622,7 +622,7 @@ function apCard(a,showDate){
   var st=a.status||'booked',end=apHM(apMin(a.time)+(+a.dur||30)),past=st==='booked'&&(a.date<iso(TODAY)||(a.date===iso(TODAY)&&apMin(a.time)+(+a.dur||30)<new Date().getHours()*60+new Date().getMinutes()));
   var dl=showDate?'<span class="muted" style="font-size:12px">'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' · </span>':'';
   var meta=[a.type,a.mode,a.where].filter(Boolean).map(esc).join(' · ');
-  return '<div class="apc st-'+st+'"><div class="aptm" data-apdrag="'+a.id+'" title="Drag onto a day in the calendar to move it"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+(past?'<span class="apst late">Past, still marked Booked</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact"><button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button>'+(past?'<button type="button" class="btn ghost sm" data-apmiss="'+a.id+'">Missed</button>'+(a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''):(st==='noshow'&&a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''))+'</div></div>';
+  return '<div class="apc st-'+st+'"><div class="aptm" data-apdrag="'+a.id+'" title="Drag onto a day in the calendar to move it"><b>'+esc(a.time||'')+'</b>to '+end+'</div><div class="apbody"><div class="apwho">'+dl+apWhoHtml(a)+(st!=='booked'?'<span class="apst">'+AP_STATUS[st]+'</span>':'')+(past?'<span class="apst late">Past, still marked Booked</span>':'')+'</div>'+(meta?'<div class="muted" style="font-size:12px">'+meta+'</div>':'')+(a.notes?'<div style="font-size:13px;margin-top:3px;white-space:pre-wrap">'+esc(String(a.notes).slice(0,220))+'</div>':'')+'</div><div class="apact">'+(st==='booked'?'<button type="button" class="btn ghost sm" data-apwa="'+a.id+'" title="Send the client a WhatsApp reminder">WhatsApp</button>':'')+'<button type="button" class="btn ghost sm" data-apedit="'+a.id+'">Edit</button><button type="button" class="btn ghost sm" data-apdone="'+a.id+'">'+(st==='done'?'Reopen':'Mark done')+'</button>'+(past?'<button type="button" class="btn ghost sm" data-apmiss="'+a.id+'">Missed</button>'+(a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''):(st==='noshow'&&a.caseId?'<button type="button" class="btn sm" data-aprebook="'+a.id+'">Rebook</button>':''))+'</div></div>';
 }
 function apHTML(home){
   var y=apMonth.y,mo=apMonth.m,first=new Date(y,mo,1),off=(first.getDay()+6)%7,tIso=iso(TODAY);
@@ -718,6 +718,59 @@ function apOpen(id,date,preCase){
   apDpRender();
   setTimeout(function(){var w=$('#apWho');if(w)w.focus()},50);
 }
+function waDay(d,rel){
+  var x=new Date(d+'T00:00:00'),t=iso(TODAY),tm=iso(new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()+1));
+  if(rel&&d===t)return 'today';if(rel&&d===tm)return 'tomorrow';
+  return x.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+}
+function waHow(a){
+  var w=String(a.where||'').trim(),m=a.mode||'';
+  if(m==='Phone')return 'by phone'+(w?' ('+w+')':'');
+  if(m==='Video call')return 'by video call'+(w?': '+w:'');
+  if(m==='In person'||m==='Office')return 'in person'+(w?' at '+w:'');
+  return w?'('+w+')':'';
+}
+function waText(a,kind,first){
+  var adv=(invProfile().name||'').trim(),ty=(a.type&&a.type!=='Other')?a.type.toLowerCase()+' ':'',how=waHow(a),hw=how?how+' ':'';
+  var sign=adv?(kind==='confirm'?'':' Thanks, '+adv):'';
+  if(kind==='confirm')return 'Hi '+first+', '+(adv?'this is '+adv+'. ':'')+'I am confirming your '+ty+'appointment '+hw+'on '+waDay(a.date)+' at '+a.time+'. Please reply to confirm that works for you, or let me know if you need to change it. Thank you.';
+  var rel=waDay(a.date,true);
+  return 'Hi '+first+', just a friendly reminder about your '+ty+'appointment '+hw+(rel==='today'||rel==='tomorrow'?rel:'on '+rel)+' at '+a.time+'. Please let me know if you can no longer make it.'+sign;
+}
+function waOpen(a,kind){
+  var old=document.getElementById('waOv');if(old)old.remove();
+  var c=apCase(a)||(a.caseId?cases.filter(function(x){return x.id===a.caseId})[0]:null),ppl=[];
+  if(c)(c.applicants||[]).forEach(function(p){if(bdIntl(p.phone))ppl.push({name:p.name||'Client',phone:p.phone})});
+  var ov=document.createElement('div');ov.id='waOv';
+  ov.style.cssText='position:fixed;inset:0;z-index:270;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  var when=waDay(a.date)+' at '+a.time;
+  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="WhatsApp message" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(580px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">'+(kind==='confirm'?'Appointment booked':'WhatsApp reminder')+'</h2><button type="button" class="btn ghost" id="waX">'+(kind==='confirm'?'Skip':'Close')+'</button></div>'+
+    '<p class="muted" style="margin:8px 0 12px">'+esc(a.who||'Client')+' · '+esc(when)+'</p>'+
+    '<div class="grid" style="margin-bottom:10px"><label class="f">Message<select id="waKind"><option value="confirm"'+(kind==='confirm'?' selected':'')+'>Booking confirmation</option><option value="remind"'+(kind==='remind'?' selected':'')+'>Reminder</option></select></label>'+
+    (ppl.length>1?'<label class="f">Send to<select id="waTo">'+ppl.map(function(p,i){return '<option value="'+i+'">'+esc(p.name)+' · '+esc(p.phone)+'</option>'}).join('')+'</select></label>':
+     ppl.length===1?'<div class="f"><span>Send to</span><div style="padding:8px 0">'+esc(ppl[0].name)+' · '+esc(ppl[0].phone)+'</div></div>':
+     '<label class="f">Client WhatsApp number<input type="tel" id="waNum" placeholder="07..."></label>')+'</div>'+
+    '<label class="f">Message (you can edit it before sending)<textarea id="waTxt" rows="7" style="width:100%;box-sizing:border-box"></textarea></label>'+
+    '<div class="add" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="waGo">Open WhatsApp</button><button type="button" class="btn ghost" id="waCp">Copy message</button></div>'+
+    '<p class="muted" style="font-size:12px;margin:10px 0 0">WhatsApp opens with the message ready. You press Send there. Do not put NI numbers, bank details or income figures in the message.</p></div>';
+  document.body.appendChild(ov);
+  function who(){var s=document.getElementById('waTo'),p=ppl[s?+s.value:0];return p||{name:a.who||'',phone:(document.getElementById('waNum')||{}).value||''}}
+  function first(){return bdFirst(who().name)||'there'}
+  function fill(){var tx=document.getElementById('waTxt'),k=document.getElementById('waKind').value;tx.value=waText(a,k,first())}
+  fill();
+  ov.addEventListener('change',function(e){if(e.target.id==='waKind'||e.target.id==='waTo')fill()});
+  ov.addEventListener('mousedown',function(e){if(e.target===ov)ov.remove()});
+  ov.addEventListener('keydown',function(e){if(e.key==='Escape')ov.remove()});
+  ov.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('button');if(!b)return;
+    if(b.id==='waX'){ov.remove();return}
+    var tx=document.getElementById('waTxt').value;
+    if(b.id==='waCp'){try{navigator.clipboard.writeText(tx).then(function(){toast('Message copied')},function(){toast('Could not copy. Select the text and press Ctrl+C')})}catch(x){toast('Could not copy. Select the text and press Ctrl+C')}return}
+    if(b.id==='waGo'){var n=bdIntl(who().phone);if(!n){toast('Enter the client\'s WhatsApp number first');var ni=document.getElementById('waNum');if(ni)ni.focus();return}
+      window.open('https://wa.me/'+n+'?text='+encodeURIComponent(tx),'_blank','noopener');toast('WhatsApp opened for '+first());ov.remove()}
+  });
+}
 function apSave(){
   var msg=$('#apMsg'),wv=$('#apWho').value.trim(),date=$('#apDate').value,time=$('#apTime').value;
   if(!wv){msg.textContent='Choose or type who the appointment is with.';return}
@@ -729,7 +782,8 @@ function apSave(){
   if(clash.length&&!apClash){apClash=true;msg.textContent='That overlaps with '+apWho(clash[0])+' at '+clash[0].time+'. Press the button again to book it anyway.';return}
   write('ap-'+id,function(){return apEditId?ref.update(d):ref.set(d)});
   apSel=date;var pd=date.split('-');apMonth={y:+pd[0],m:+pd[1]-1};
-  var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
+  var was=apEditId;apClose();toast(was?'Appointment updated':'Appointment booked');
+  if(!was&&c&&d.status==='booked'&&d.date>=iso(TODAY)){var wa0=Object.assign({id:id},d);setTimeout(function(){waOpen(wa0,'confirm')},350)}setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);
 }
 /* ---------- advice fee and invoices ---------- */
 var FEE_WHEN=[['','Choose…'],['application','On application'],['offer','On offer'],['completion','On completion'],['other','Other / agreed date']];
@@ -1808,6 +1862,8 @@ document.addEventListener('click',function(e){
   var apk=t.closest&&t.closest('[data-apdone]');
   var apm2=t.closest&&t.closest('[data-apmiss]');
   if(apm2){var mk0=apm2.getAttribute('data-apmiss'),ma0=appts.filter(function(x){return x.id===mk0})[0];write('ap-'+mk0,function(){return apCol.doc(mk0).update({status:'noshow',updatedAt:Date.now()})});toast('Marked as missed'+(ma0&&apMissTask(ma0)?'. Rebook task added':''));setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30);return}
+  var wab=t.closest&&t.closest('[data-apwa]');
+  if(wab){var wa1=appts.filter(function(x){return x.id===wab.getAttribute('data-apwa')})[0];if(wa1)waOpen(wa1,'remind');return}
   var apr=t.closest&&t.closest('[data-aprebook]');
   if(apr){var ra=appts.filter(function(x){return x.id===apr.getAttribute('data-aprebook')})[0];if(ra){apOpen(null,iso(TODAY),ra.caseId||null);setTimeout(function(){var ty=$('#apType'),md=$('#apMode'),dr=$('#apDur');if(ty&&ra.type)ty.value=ra.type;if(md&&ra.mode)md.value=ra.mode;if(dr&&ra.dur)dr.value=ra.dur;apDpRender()},60)}return}
   if(apk){var ak=apk.getAttribute('data-apdone'),aa=appts.filter(function(x){return x.id===ak})[0];if(aa){write('ap-'+ak,function(){return apCol.doc(ak).update({status:aa.status==='done'?'booked':'done',updatedAt:Date.now()})});setTimeout(function(){if(view==='appointments'||view==='tasks')render();renderNav()},30)}return}
