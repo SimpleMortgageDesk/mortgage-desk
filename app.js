@@ -369,6 +369,56 @@ function caseRowHTML(c,ing){
       (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
       (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
 }
+
+/* ---------- tidy client numbers: one number per client, no number shared by two clients ---------- */
+function noVal(s){var m=/(\d+)/.exec(s||'');return m?+m[1]:1e9}
+function planNos(){
+  var grp={};cases.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});
+  var plan={},used={},maxN=0;
+  cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)maxN=Math.max(maxN,+r[1])});
+  Object.keys(grp).forEach(function(k){
+    var g=grp[k],nos=[],seen={};
+    g.forEach(function(c){if(c.clientNo&&!seen[c.clientNo]){seen[c.clientNo]=1;nos.push(c.clientNo)}});
+    nos.sort(function(a,b){return noVal(a)-noVal(b)});
+    var keep=nos[0]||'';
+    if(nos.length>1)plan[k]={k:k,label:names(g[0]),ids:g.filter(function(c){return c.clientNo&&c.clientNo!==keep}).map(function(c){return c.id}),from:nos.slice(1),to:keep,count:g.length,why:'Same client had '+nos.length+' numbers'};
+    if(keep)(used[keep]=used[keep]||[]).push({k:k,t:Math.min.apply(null,g.map(function(c){return c.createdAt||0})),g:g,nos:nos});
+  });
+  Object.keys(used).forEach(function(no){
+    var u=used[no];if(u.length<2)return;
+    u.sort(function(a,b){return a.t-b.t});
+    u.slice(1).forEach(function(x){
+      maxN++;var nn='C'+String(maxN).padStart(3,'0');
+      plan[x.k]={k:x.k,label:names(x.g[0]),ids:x.g.map(function(c){return c.id}),from:x.nos.slice(),to:nn,count:x.g.length,why:'Number '+no+' was also used by another client ('+names(u[0].g[0])+')'};
+    });
+  });
+  return Object.keys(plan).map(function(k){return plan[k]}).sort(function(a,b){return noVal(a.to)-noVal(b.to)});
+}
+function openTidyNos(){
+  var old=document.getElementById('tdOv');if(old)old.remove();
+  var pl=planNos();if(!pl.length){toast('Every client already has one number');return}
+  var ov=document.createElement('div');ov.id='tdOv';
+  ov.style.cssText='position:fixed;inset:0;z-index:270;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="Tidy client numbers" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(640px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h2 style="margin:0;font-size:20px">Tidy client numbers</h2><button type="button" class="btn ghost" id="tdX">Cancel</button></div>'+
+    '<div class="muted" style="font-size:13px;margin-bottom:10px">Each client keeps their lowest (oldest) number. Untick any change you do not want. Only the client number changes; nothing else on the case is touched.</div>'+
+    '<div style="overflow:auto;border:1px solid var(--line,#D4DBDF);border-radius:8px">'+pl.map(function(p,i){
+      return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line,#E5EAED);cursor:pointer"><input type="checkbox" data-tdi="'+i+'" checked style="margin-top:3px"><span><b>'+esc(p.label)+'</b><br><span>'+esc(p.from.join(', '))+' → <b>'+esc(p.to)+'</b></span> <span class="muted" style="font-size:12px">· '+p.count+' case'+(p.count===1?'':'s')+'</span><br><span class="muted" style="font-size:12px">'+esc(p.why)+'</span></span></label>';
+    }).join('')+'</div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><button type="button" class="btn" id="tdGo">Apply changes</button></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown',function(e){if(e.target===ov)ov.remove()});
+  ov.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('button');if(!b)return;
+    if(b.id==='tdX'){ov.remove();return}
+    if(b.id==='tdGo'){
+      var jobs=[],n=0;
+      ov.querySelectorAll('[data-tdi]').forEach(function(x){if(!x.checked)return;var p=pl[+x.getAttribute('data-tdi')];n++;p.ids.forEach(function(id){jobs.push(patch(id,{clientNo:p.to}))})});
+      ov.remove();
+      Promise.all(jobs).then(function(){toast(n?('Tidied '+n+' client'+(n===1?'':'s')):'No changes made')},function(){toast('Some changes could not be saved. Try again.')});
+    }
+  });
+}
 function pNm(p){return String(p.name||'').toLowerCase().replace(/\s+/g,' ').trim().replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s+/g,' ').trim().replace(/^(mr|mrs|miss|ms|dr|mx)\.?\s+/,'')}
 function samePerson(a,b){var x=pNm(a);return !!x&&x===pNm(b)&&(!a.dob||!b.dob||a.dob===b.dob)}
 function dirPropsHTML(list){
@@ -400,7 +450,7 @@ function dirPropsHTML(list){
 function casesHTML(){
   var list=sortList(visible());
   var opts='<option value="">All stages</option>'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<option value="'+s.id+'"'+(stageFilter===s.id?' selected':'')+'>'+s.label+'</option>'}).join('');
-  var h='<div class="pagehead"><h1>All cases</h1><button class="btn ghost" data-act="export">Export CSV</button></div>'+
+  var h='<div class="pagehead"><h1>All cases</h1><span>'+(planNos().length?'<button class="btn ghost" data-act="tidyno" title="Some clients have more than one number, or two clients share a number">Tidy client numbers ('+planNos().length+')</button> ':'')+'<button class="btn ghost" data-act="export">Export CSV</button></span></div>'+
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+lenderSelHTML()+revSelHTML()+'<details class="colpick"><summary class="btn ghost">Columns</summary><div class="colbox">'+CASE_COLS.map(function(c){return '<label><input type="checkbox" data-colk="'+c[0]+'"'+(colOn(c[0])?' checked':'')+'> '+c[1]+'</label>'}).join('')+'</div></details>'+((stageFilter||lenderFilter||revFilter)?' <button type="button" class="btn ghost" data-clrf="1">Clear filters</button>':'')+'</div>';
   if(!cases.length)return h+emptyHTML();
   h+='<div class="stlegend" aria-label="Colour key">'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<span class="stl st-'+s.id+'">'+s.label+'</span>'}).join('')+'<span class="stlnote"><i class="rbar red"></i> review or rate end within 30 days or overdue <i class="rbar amb"></i> within 90 days</span></div>'+
@@ -1065,6 +1115,7 @@ document.addEventListener('click',function(e){var t=e.target;if(!t.closest)retur
 });
 document.addEventListener('change',function(e){if(e.target&&e.target.id==='apMvTime'){var o=$('#apMvOv');if(o){o.dataset.force='';var m=$('#apMvMsg');if(m)m.textContent=''}}});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&$('#apMvOv')){apMoveClose();e.stopPropagation()}},true);
+document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var w=document.getElementById('waOv'),n=document.getElementById('ncOv'),td=document.getElementById('tdOv');if(td){td.remove();e.stopPropagation();return}if(w){w.remove();e.stopPropagation();return}if(document.getElementById('apOv')&&!document.getElementById('apMvOv')){apClose();e.stopPropagation();return}if(n){n.remove();e.stopPropagation()}},true);
 /* ---------- marketing contacts ---------- */
 var mkCol=null,mkItems=[],mkQuery='',mkConsent='',mkGroup='',mkGroupKey='',mkEditId=null,mkTab='contacts';
 var MK_LABEL={yes:'Opted in',unknown:'Unknown',no:'Opted out'};
@@ -1824,6 +1875,7 @@ document.addEventListener('click',function(e){
   if(nv){nbFlush();view=nv.dataset.v;render();return}
   if(t.closest('#newBtn')||t.closest('[data-act="new"]')){if(cases.length)openNewChooser();else openDrawer(null);return}
   if(t.closest('#pdfBtn')||t.closest('[data-act="pdf"]')){$('#pdfIn').click();return}
+  if(t.closest('[data-act="tidyno"]')){openTidyNos();return}
   if(t.closest('[data-act="export"]')){exportCsv();return}
   if(t.closest('#backupBtn')){backupAll();return}
   if(t.closest('#trayBtn')){if(trayOpen)closeTray();else openTray();return}

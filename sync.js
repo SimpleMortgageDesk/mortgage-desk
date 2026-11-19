@@ -882,7 +882,7 @@
         '<label>Business name</label><input id="prBiz"' + dis + ' type="text" maxlength="80" value="' + esc(p.biz || '') + '" style="' + inp + '">' +
         '<label>Mobile number (WhatsApp)</label>' + (p.phone
           ? '<div style="display:flex;gap:8px;align-items:center;margin:4px 0 10px"><input type="text" disabled value="+' + esc(waShow(p.phone)) + '" style="flex:1;padding:8px 10px;border:1px solid #D4DBDF;border-radius:8px;font:inherit;background:#EDF0F1"><button class="btn ghost" data-p="chg"' + dis + '>Change number</button></div><div id="prChg"></div>'
-          : '<input id="prPhone" type="tel" placeholder="e.g. 07722223199" value="' + esc(ph) + '" style="' + inp + '"><p style="margin:-6px 0 10px;color:#58697A;font-size:12px">Once saved, the number is locked. Changing it later needs your Microsoft account password.</p>') +
+          : '<input id="prPhone" type="tel" placeholder="e.g. 07700 900123" value="' + esc(ph) + '" style="' + inp + '"><p style="margin:-6px 0 10px;color:#58697A;font-size:12px">Once saved, the number is locked. Changing it later needs your Microsoft account password.</p>') +
         '<label>Email address</label><input id="prMail"' + dis + ' type="email" maxlength="120" value="' + esc(p.email || '') + '" placeholder="' + esc(acc.mail || '') + '" style="' + inp + '">' +
         '<button class="btn" data-p="save"' + dis + '>Save profile</button><p id="prMsg" style="min-height:18px;margin:10px 0 0">' + esc(msg || '') + '</p></div>';
     }
@@ -1163,7 +1163,7 @@
         '<p style="margin:6px 0 0;color:#1b5e20;font-size:13px">' + esc((($('syncState') || {}).textContent || '').trim()) + '</p>' +
         '<p style="margin:10px 0 0;color:#58697A;font-size:12px">App version: ' + esc(window.MD_BUILD || 'unknown') + ' &middot; <a href="#" data-a="guide">Quick guide</a></p><p style="margin:10px 0;color:#58697A">Cases are saved in your OneDrive, in the folder <b>' + esc(ROOT) + '</b>. ' + esc(pending() ? pending() + ' change(s) are waiting to upload.' : 'Everything is uploaded.') + '</p>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">My profile</h3><p style="margin:0 0 8px;color:#58697A">' + (profGet().name ? esc(profGet().name) + (profGet().biz ? ' &middot; ' + esc(profGet().biz) : '') : 'Add your name, business, mobile number and email.') + '</p><button class="btn" data-a="profile">' + (profGet().name || profGet().phone ? 'Edit profile' : 'Set up profile') + '</button>' +
-        '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
+        '<h3 style="margin:18px 0 6px;font-size:15px">Security</h3>' + (pinData() ? '<p style="margin:0 0 8px;color:#1b5e20">PIN is on. The screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn ghost" data-a="pin">Change PIN &amp; Auto-lock</button><div style="margin-top:12px"><label style="display:block;font-weight:600;margin-bottom:4px" for="trustSel">Trusted device</label><select id="trustSel" style="padding:8px;border-radius:8px;max-width:100%">' + [[0, 'Off: sign out after ' + (IDLE_BASE / 3600000) + ' hours idle (recommended)'], [8, 'Trusted: stay signed in for 8 hours idle'], [24, 'Trusted: stay signed in for 1 day idle'], [72, 'Trusted: stay signed in for 3 days idle']].map(function (o) { return '<option value="' + o[0] + '"' + (trustH() === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><div style="font-size:12px;color:#5b6b75;margin-top:4px">Use this only on a device that is yours and always with you, such as your own iPad. The PIN still locks the screen after ' + (LOCK_MS / 60000) + ' minutes. The copy kept on the device is deleted when the longer period passes with no use, or when you sign out.</div></div>' : '<p style="margin:0 0 8px;color:#b3261e;background:#fdecea;border-radius:6px;padding:8px 10px"><b>Warning:</b> no PIN is set. Anyone who picks up this device while you are signed in can see your clients. Set a PIN so the screen locks after ' + (LOCK_MS / 60000) + ' minutes with no activity.</p><button class="btn" data-a="pin">Set up PIN</button>') +
         '<h3 style="margin:18px 0 6px;font-size:15px">Local copy (if OneDrive is slow or down)</h3><p style="margin:0 0 8px;color:#58697A">' + (mirOn() ? 'On: identical copy kept in the folder "' + esc((mirInfo() || {}).name || '') + '" on this computer.' : 'Keep an identical copy of your client records in a folder on this computer, so they still load when OneDrive is not responding.') + '</p><button class="btn" data-a="mirror">' + (mirOn() ? 'Local copy settings' : 'Set up local copy') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Invoices</h3><p style="margin:0 0 8px;color:#58697A">' + (invGet().accounts.length ? invGet().accounts.length + ' bank account' + (invGet().accounts.length === 1 ? '' : 's') + ' saved, next invoice number ' + esc(invGet().next || 1) + '.' : 'Add the bank details and numbering printed on your fee invoices.') + '</p><button class="btn" data-a="invoice">' + (invGet().payee ? 'Edit invoice details' : 'Set up invoice details') + '</button>' +
         '<h3 style="margin:18px 0 6px;font-size:15px">Sync</h3><div style="margin:0 0 6px"><button class="btn" data-a="sync">Sync now</button></div>' +
@@ -1197,6 +1197,7 @@
         flush();
       } catch (x) { say('That file could not be read as a backup.'); }
     });
+    ov.addEventListener('change', function (e) { if (e.target && e.target.id === 'trustSel') { var v = +e.target.value || 0; lset('md.trust', v ? String(v) : null); markAct(); say(v ? 'This device is now trusted: it stays signed in for ' + (v >= 24 ? (v / 24) + (v === 24 ? ' day' : ' days') : v + ' hours') + ' with no use.' : 'Back to the normal sign-out period.'); } });
     ov.addEventListener('click', async function (e) {
       var a = e.target.closest && e.target.closest('[data-a]'); if (!a) return; a = a.getAttribute('data-a');
       if (a === 'close') ov.remove();
@@ -1231,11 +1232,14 @@
     location.replace(location.pathname + '?fresh=' + Date.now());
   }
   /* ---------- automatic log out after a period with no activity (default 2 hours) ---------- */
-  var IDLE_MS = Math.max(0.05, +(CFG.idleMinutes || 120)) * 60000, idleBusy = false, lastW = 0;
-  function idleLabel() { var m = IDLE_MS / 60000; return m >= 60 ? (m / 60 === 1 ? '1 hour' : (m / 60) + ' hours') : m + ' minutes'; }
+  var IDLE_BASE = Math.max(0.05, +(CFG.idleMinutes || 120)) * 60000, idleBusy = false, lastW = 0;
+  /* Trusted device: only when a PIN is set, the person can choose a longer idle period for this device (8 hours, 1 day or 3 days). The PIN screen still locks after the usual few minutes. */
+  function trustH() { var v = 0; try { v = +localStorage.getItem('md.trust') || 0; } catch (e) {} return [8, 24, 72].indexOf(v) > -1 ? v : 0; }
+  function idleMs() { var h = trustH(); return (h && pinData()) ? h * 3600000 : IDLE_BASE; }
+  function idleLabel() { var m = idleMs() / 60000; return m >= 60 ? (m / 60 === 1 ? '1 hour' : (m / 60) + ' hours') : m + ' minutes'; }
   function markAct() { if (locked) return; try { localStorage.setItem('md.act', String(Date.now())); } catch (e) {} }
   function lastAct() { var v = 0; try { v = +localStorage.getItem('md.act') || 0; } catch (e) {} return v || Date.now(); }
-  function isIdle() { return Date.now() - lastAct() >= IDLE_MS; }
+  function isIdle() { return Date.now() - lastAct() >= idleMs(); }
   async function autoSignOut(force) {
     if (pending()) { try { await flush(); } catch (e) {} }
     if (!force && !locked && (navigator.onLine === false || st.offline)) {
@@ -1369,11 +1373,11 @@
     idleBusy = true; autoSignOut().then(function () { idleBusy = false; }, function () { idleBusy = false; });
   }
   function startIdleWatch() {
-    var gap = Math.min(5000, IDLE_MS / 4);
+    var gap = Math.min(5000, IDLE_BASE / 4);
     ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel', 'click'].forEach(function (ev) {
       window.addEventListener(ev, function () { var n = Date.now(); if (n - lastW > gap) { lastW = n; markAct(); } }, { capture: true, passive: true });
     });
-    setInterval(checkIdle, Math.min(30000, IDLE_MS / 2));
+    setInterval(checkIdle, Math.min(30000, IDLE_BASE / 2));
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkIdle(); });
     window.addEventListener('focus', checkIdle); window.addEventListener('pageshow', checkIdle);
   }
