@@ -358,7 +358,18 @@ var colsHide=(function(){try{return JSON.parse(localStorage.getItem('colsHide')|
 function colOn(k){return colsHide.indexOf(k)<0}
 function lenderSelHTML(){var ls={};cases.forEach(function(c){if(c.lender)ls[c.lender]=1});return '<select id="lenderSel" aria-label="Filter by lender"><option value="">All lenders</option>'+Object.keys(ls).sort().map(function(l){return '<option value="'+esc(l)+'"'+(lenderFilter===l?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select>'}
 function revSelHTML(){var ms={};cases.forEach(function(c){var r=reviewOf(c);if(r)ms[r.slice(0,7)]=1});return '<select id="revSel" aria-label="Filter by review month"><option value="">Any review month</option>'+Object.keys(ms).sort().map(function(m){return '<option value="'+m+'"'+(revFilter===m?' selected':'')+'>'+new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</option>'}).join('')+'<option value="none"'+(revFilter==='none'?' selected':'')+'>No review date</option></select>'}
-function pNm(p){return String(p.name||'').toLowerCase().replace(/\s+/g,' ').trim().replace(/^(mr|mrs|miss|ms|dr|mx)\.?\s+/,'')}
+
+function caseHeadHTML(){return '<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';}
+function caseRowHTML(c,ing){
+    var l=ltv(c);
+    var rv=reviewOf(c),rd=rv?diff(rv):9999,rcl=rd<=30?' rend-red':rd<=90?' rend-amb':'';
+    return '<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(ing?' ing':'')+'" data-open="'+c.id+'"><td class="cnocol">'+esc(c.clientNo||'')+'</td><td><b>'+esc(names(c))+'</b>'+(isSpv(c)&&people(c)?'<div class="muted" style="font-size:12px">Directors: '+esc(people(c))+'</div>':'')+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
+      (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
+      (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
+      (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
+      (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
+}
+function pNm(p){return String(p.name||'').toLowerCase().replace(/\s+/g,' ').trim().replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s+/g,' ').trim().replace(/^(mr|mrs|miss|ms|dr|mx)\.?\s+/,'')}
 function samePerson(a,b){var x=pNm(a);return !!x&&x===pNm(b)&&(!a.dob||!b.dob||a.dob===b.dob)}
 function dirPropsHTML(list){
   if(!query.trim())return '';
@@ -368,22 +379,21 @@ function dirPropsHTML(list){
     var k=clientKey(c0),mine=cases.filter(function(x){return clientKey(x)===k}),dirs=[];
     mine.forEach(function(x){(x.applicants||[]).forEach(function(p){if(pNm(p)&&!dirs.some(function(d){return samePerson(d,p)}))dirs.push(p)})});
     if(!dirs.length)return;
-    var joint=[],sole=[],other=[];
+    var joint=[],sole=[],other=[],maybe=[];
     cases.forEach(function(x){
       if(isSpv(x))return;
       var ap=(x.applicants||[]).filter(function(p){return pNm(p)}),m=ap.filter(function(p){return dirs.some(function(d){return samePerson(d,p)})});
-      if(!m.length)return;
+      if(!m.length){if(ap.some(function(p){return dirs.some(function(d){return pNm(d)===pNm(p)})}))maybe.push(x);return}
       if(m.length>=2)joint.push(x);else if(ap.length===1)sole.push(x);else other.push(x);
     });
     function sec(title,arr){
-      if(!arr.length)return '';
-      return '<tr class="cg"><td colspan="5"><b>'+title+'</b> <span class="muted">· '+arr.length+'</span></td></tr>'+arr.map(function(x){
-        return '<tr class="click" data-open="'+x.id+'"><td class="cnocol">'+esc(x.clientNo||'')+'</td><td><b>'+esc(people(x)||names(x))+'</b></td><td>'+esc(short(x.propertyAddress))+propTag(x)+'</td><td>'+esc(x.type||'')+'</td><td><span class="chip">'+esc(STAGE_LABEL[x.stage]||x.stage)+'</span></td></tr>';
-      }).join('');
+      var hd='<tr class="cg"><td colspan="9"><b>'+title+'</b> <span class="muted">· '+arr.length+'</span></td></tr>';
+      if(!arr.length)return hd+'<tr><td colspan="9" class="muted">None found</td></tr>';
+      return hd+arr.map(function(x){return caseRowHTML(x,true)}).join('');
     }
-    var body=sec('Owned jointly by the directors',joint)+sec('Owned in a director\u2019s sole name',sole)+sec('Owned by a director with someone else',other);
+    var body=sec('Owned jointly by the directors',joint)+sec('Owned in a director\u2019s sole name',sole)+sec('Owned by a director with someone else',other)+(maybe.length?sec('Possible matches: same name, different date of birth',maybe):'');
     out+='<div class="dirprops"><h3 style="margin:18px 0 6px">Properties the directors of '+esc(names(c0))+' hold personally</h3><div class="muted" style="font-size:13px;margin-bottom:6px">Directors: '+esc(dirs.map(function(d){return d.name}).join(', '))+'</div>'+
-      (body?'<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Owner(s)</th><th>Property</th><th>Type</th><th>Stage</th></tr></thead><tbody>'+body+'</tbody></table></div>':'<div class="muted">None found in the app under the directors\u2019 own names.</div>')+'</div>';
+      caseHeadHTML()+body+'</tbody></table></div>'+'</div>';
   });
   return out;
 }
@@ -394,20 +404,14 @@ function casesHTML(){
     '<div class="filters"><select id="stageSel" aria-label="Filter by stage">'+opts+'</select> <select id="sortSel" aria-label="Sort clients">'+[['updated','Sort: recently updated'],['first','Sort: first name A–Z'],['review','Sort: mortgage review date'],['task','Sort: next task due date'],['clientno','Sort: client number']].map(function(o){return '<option value="'+o[0]+'"'+(sortBy===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+lenderSelHTML()+revSelHTML()+'<details class="colpick"><summary class="btn ghost">Columns</summary><div class="colbox">'+CASE_COLS.map(function(c){return '<label><input type="checkbox" data-colk="'+c[0]+'"'+(colOn(c[0])?' checked':'')+'> '+c[1]+'</label>'}).join('')+'</div></details>'+((stageFilter||lenderFilter||revFilter)?' <button type="button" class="btn ghost" data-clrf="1">Clear filters</button>':'')+'</div>';
   if(!cases.length)return h+emptyHTML();
   h+='<div class="stlegend" aria-label="Colour key">'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<span class="stl st-'+s.id+'">'+s.label+'</span>'}).join('')+'<span class="stlnote"><i class="rbar red"></i> review or rate end within 30 days or overdue <i class="rbar amb"></i> within 90 days</span></div>'+
-  '<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Client</th>'+(colOn('type')?'<th>Type</th>':'')+(colOn('stage')?'<th>Stage</th>':'')+(colOn('lender')?'<th>Lender</th>':'')+(colOn('task')?'<th>Next task due</th>':'')+(colOn('review')?'<th>Review date</th>':'')+(colOn('note')?'<th>Latest note</th>':'')+(colOn('prot')?'<th>Protection</th>':'')+'</tr></thead><tbody>';
+  ''+caseHeadHTML();
   if(!list.length)h+='<tr><td colspan="9" class="muted">No cases match.</td></tr>';
   var grp={};list.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});var done={};
   list.forEach(function(c0){
     var k0=clientKey(c0),g=grp[k0];if(done[k0])return;done[k0]=1;
     if(g.length>1)h+='<tr class="cg"><td colspan="9"><b>'+esc(names(c0))+'</b> <span class="muted">'+(isSpv(c0)&&c0.companyNumber?'· Company no. '+esc(c0.companyNumber)+' ':'')+(isSpv(c0)&&people(c0)?'· Directors: '+esc(people(c0))+' ':'')+'· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
     g.forEach(function(c){
-    var ne=nextEvent(c),l=ltv(c);
-    var rv=reviewOf(c),rd=rv?diff(rv):9999,rcl=rd<=30?' rend-red':rd<=90?' rend-amb':'';
-    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td class="cnocol">'+esc(c.clientNo||'')+'</td><td><b>'+esc(names(c))+'</b>'+(isSpv(c)&&people(c)?'<div class="muted" style="font-size:12px">Directors: '+esc(people(c))+'</div>':'')+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
-      (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
-      (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
-      (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
-      (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
+    h+=caseRowHTML(c,g.length>1);
     });
   });
   return h+'</tbody></table></div>'+dirPropsHTML(list);
