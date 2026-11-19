@@ -358,6 +358,35 @@ var colsHide=(function(){try{return JSON.parse(localStorage.getItem('colsHide')|
 function colOn(k){return colsHide.indexOf(k)<0}
 function lenderSelHTML(){var ls={};cases.forEach(function(c){if(c.lender)ls[c.lender]=1});return '<select id="lenderSel" aria-label="Filter by lender"><option value="">All lenders</option>'+Object.keys(ls).sort().map(function(l){return '<option value="'+esc(l)+'"'+(lenderFilter===l?' selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select>'}
 function revSelHTML(){var ms={};cases.forEach(function(c){var r=reviewOf(c);if(r)ms[r.slice(0,7)]=1});return '<select id="revSel" aria-label="Filter by review month"><option value="">Any review month</option>'+Object.keys(ms).sort().map(function(m){return '<option value="'+m+'"'+(revFilter===m?' selected':'')+'>'+new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</option>'}).join('')+'<option value="none"'+(revFilter==='none'?' selected':'')+'>No review date</option></select>'}
+function pNm(p){return String(p.name||'').toLowerCase().replace(/\s+/g,' ').trim().replace(/^(mr|mrs|miss|ms|dr|mx)\.?\s+/,'')}
+function samePerson(a,b){var x=pNm(a);return !!x&&x===pNm(b)&&(!a.dob||!b.dob||a.dob===b.dob)}
+function dirPropsHTML(list){
+  if(!query.trim())return '';
+  var seen={},cos=[];list.forEach(function(c){if(!isSpv(c))return;var k=clientKey(c);if(seen[k])return;seen[k]=1;cos.push(c)});
+  var out='';
+  cos.forEach(function(c0){
+    var k=clientKey(c0),mine=cases.filter(function(x){return clientKey(x)===k}),dirs=[];
+    mine.forEach(function(x){(x.applicants||[]).forEach(function(p){if(pNm(p)&&!dirs.some(function(d){return samePerson(d,p)}))dirs.push(p)})});
+    if(!dirs.length)return;
+    var joint=[],sole=[],other=[];
+    cases.forEach(function(x){
+      if(isSpv(x))return;
+      var ap=(x.applicants||[]).filter(function(p){return pNm(p)}),m=ap.filter(function(p){return dirs.some(function(d){return samePerson(d,p)})});
+      if(!m.length)return;
+      if(m.length>=2)joint.push(x);else if(ap.length===1)sole.push(x);else other.push(x);
+    });
+    function sec(title,arr){
+      if(!arr.length)return '';
+      return '<tr class="cg"><td colspan="5"><b>'+title+'</b> <span class="muted">· '+arr.length+'</span></td></tr>'+arr.map(function(x){
+        return '<tr class="click" data-open="'+x.id+'"><td class="cnocol">'+esc(x.clientNo||'')+'</td><td><b>'+esc(people(x)||names(x))+'</b></td><td>'+esc(short(x.propertyAddress))+propTag(x)+'</td><td>'+esc(x.type||'')+'</td><td><span class="chip">'+esc(STAGE_LABEL[x.stage]||x.stage)+'</span></td></tr>';
+      }).join('');
+    }
+    var body=sec('Owned jointly by the directors',joint)+sec('Owned in a director\u2019s sole name',sole)+sec('Owned by a director with someone else',other);
+    out+='<div class="dirprops"><h3 style="margin:18px 0 6px">Properties the directors of '+esc(names(c0))+' hold personally</h3><div class="muted" style="font-size:13px;margin-bottom:6px">Directors: '+esc(dirs.map(function(d){return d.name}).join(', '))+'</div>'+
+      (body?'<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Owner(s)</th><th>Property</th><th>Type</th><th>Stage</th></tr></thead><tbody>'+body+'</tbody></table></div>':'<div class="muted">None found in the app under the directors\u2019 own names.</div>')+'</div>';
+  });
+  return out;
+}
 function casesHTML(){
   var list=sortList(visible());
   var opts='<option value="">All stages</option>'+STAGES.concat([{id:'lost',label:'Closed lost'}]).map(function(s){return '<option value="'+s.id+'"'+(stageFilter===s.id?' selected':'')+'>'+s.label+'</option>'}).join('');
@@ -381,7 +410,7 @@ function casesHTML(){
       (colOn('note')?'<td class="ntc">'+latestNoteCell(c)+'</td>':'')+(colOn('prot')?'<td class="ntc">'+latestNoteCell(c,'protection')+'</td>':'')+'</tr>';
     });
   });
-  return h+'</tbody></table></div>';
+  return h+'</tbody></table></div>'+dirPropsHTML(list);
 }
 
 /* ---------- reminders ---------- */
