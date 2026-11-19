@@ -47,13 +47,18 @@ function fillClientNos(){
 }
 setInterval(fillClientNos,8000);
 function nextClientNo(){var m=0;cases.forEach(function(c){var r=/^C(\d+)$/i.exec(c.clientNo||'');if(r)m=Math.max(m,+r[1])});return 'C'+String(m+1).padStart(3,'0')}
-function names(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):'Unnamed client'}
+function people(c){var a=(c.applicants||[]).map(function(x){return x.name}).filter(Boolean);return a.length?a.join(' & '):''}
+function isSpv(c){return c.borrowerType==='spv'}
+function names(c){if(isSpv(c)&&(c.companyName||'').trim())return c.companyName.trim();var p=people(c);return p||'Unnamed client'}
+var dirMode=false;
+function coNo(c){return String(c.companyNumber||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function relabelDirs(){var f=document.getElementById('f-borrowerType');if(!f)return;dirMode=f.value==='spv';var lg=document.getElementById('dirLegend');if(lg)lg.textContent=dirMode?'Directors and residential address':'Applicants and residential address';var ad=document.getElementById('addApp');if(ad)ad.textContent=dirMode?'Add director':'Add applicant';document.querySelectorAll('#apps .app .top2 span').forEach(function(s,i){s.textContent=(dirMode?'Director ':'Applicant ')+(i+1)})}
 var PROP_TYPES=[['','Not set'],['main','Main residence'],['btl','Buy to let'],['second','Second home'],['holiday','Holiday home']];
 function propLabel(v){var o=PROP_TYPES.filter(function(q){return q[0]===v})[0];return o&&o[0]?o[1]:''}
 function spvTag(c){return c.borrowerType==='spv'?' <span class="ptag spv" title="'+esc(c.companyName||'Limited company (SPV)')+'">SPV</span>':''}
 function propTag(c){var l=propLabel(c.propUse);return spvTag(c)+(l?' <span class="ptag '+esc(c.propUse)+'">'+esc(l)+'</span>':'')}
 /* Same client = same applicant names and dates of birth (any order). A joint case with a different second person is a different client. */
-function clientKey(c){var a=(c.applicants||[]).map(function(x){return (x.name||'').trim().toLowerCase().replace(/\s+/g,' ')+'|'+(x.dob||'')}).filter(function(s){return s!=='|'});return a.length?a.sort().join('||'):'#'+c.id}
+function clientKey(c){if(isSpv(c)){var cn=coNo(c);if(cn)return 'co:'+cn;var nm=(c.companyName||'').trim().toLowerCase().replace(/\s+/g,' ');if(nm)return 'coname:'+nm}var a=(c.applicants||[]).map(function(x){return (x.name||'').trim().toLowerCase().replace(/\s+/g,' ')+'|'+(x.dob||'')}).filter(function(s){return s!=='|'});return a.length?a.sort().join('||'):'#'+c.id}
 function sameClient(c){var k=clientKey(c);return cases.filter(function(x){return clientKey(x)===k}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)})}
 function ownReview(c){return c.reviewDate||(c.fixedUntil?addMonths(c.fixedUntil,-REVM):'')}
 function secReview(x){return x.reviewDate||(x.fixedUntil?addMonths(x.fixedUntil,-REVM):'')}
@@ -258,8 +263,8 @@ function visible(){
     if(lenderFilter&&(c.lender||'')!==lenderFilter)return false;
     if(revFilter){var rv=reviewOf(c);if(revFilter==='none'?!!rv:rv.slice(0,7)!==revFilter)return false}
     if(!q)return true;
-    var hay=[names(c),c.propertyAddress,c.clientNo,c.lenderRef,c.lender,c.product,c.conveyancer].join(' ').toLowerCase();
-    return hay.indexOf(q)>-1;
+    var hay=[names(c),people(c),c.companyName,c.companyNumber,coNo(c),c.propertyAddress,c.clientNo,c.lenderRef,c.lender,c.product,c.conveyancer].join(' ').toLowerCase();
+    var qn=q.replace(/[^a-z0-9]/g,'');return hay.indexOf(q)>-1||(qn.length>=3&&coNo(c).toLowerCase().indexOf(qn)>-1);
   });
 }
 
@@ -365,11 +370,11 @@ function casesHTML(){
   var grp={};list.forEach(function(c){var k=clientKey(c);(grp[k]=grp[k]||[]).push(c)});var done={};
   list.forEach(function(c0){
     var k0=clientKey(c0),g=grp[k0];if(done[k0])return;done[k0]=1;
-    if(g.length>1)h+='<tr class="cg"><td colspan="9"><b>'+esc(names(c0))+'</b> <span class="muted">· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
+    if(g.length>1)h+='<tr class="cg"><td colspan="9"><b>'+esc(names(c0))+'</b> <span class="muted">'+(isSpv(c0)&&c0.companyNumber?'· Company no. '+esc(c0.companyNumber)+' ':'')+(isSpv(c0)&&people(c0)?'· Directors: '+esc(people(c0))+' ':'')+'· '+g.length+' properties: '+g.slice().sort(function(a,b){return (a.propUse==='main'?0:1)-(b.propUse==='main'?0:1)||(a.createdAt||0)-(b.createdAt||0)}).map(function(x){return propLabel(x.propUse)||'type not set'}).join(', ')+'</span></td></tr>';
     g.forEach(function(c){
     var ne=nextEvent(c),l=ltv(c);
     var rv=reviewOf(c),rd=rv?diff(rv):9999,rcl=rd<=30?' rend-red':rd<=90?' rend-amb':'';
-    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td class="cnocol">'+esc(c.clientNo||'')+'</td><td><b>'+esc(names(c))+'</b><div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
+    h+='<tr class="click stc st-'+esc(c.stage||'enquiry')+rcl+(g.length>1?' ing':'')+'" data-open="'+c.id+'"><td class="cnocol">'+esc(c.clientNo||'')+'</td><td><b>'+esc(names(c))+'</b>'+(isSpv(c)&&people(c)?'<div class="muted" style="font-size:12px">Directors: '+esc(people(c))+'</div>':'')+'<div class="muted" style="font-size:12px">'+esc(short(c.propertyAddress))+propTag(c)+'</div></td>'+
       (colOn('type')?'<td>'+esc(c.type||'')+'</td>':'')+(colOn('stage')?'<td><span class="chip">'+esc(STAGE_LABEL[c.stage]||c.stage)+'</span></td>':'')+
       (colOn('lender')?'<td>'+esc(c.lender||'')+'<div class="muted num" style="font-size:12px">'+esc(c.lenderRef||'')+'</div></td>':'')+
       (colOn('task')?taskCell(c):'')+(colOn('review')?'<td>'+(reviewOf(c)?'<span class="chip '+tone(reviewOf(c))+'">'+fd(reviewOf(c))+'</span>':'<span class="muted">—</span>')+'</td>':'')+
@@ -475,7 +480,7 @@ function pcFind(btn){
 function updSRev(){var el=$('#sRev');if(!el)return;var o=$('#f-reviewDate'),v=o?o.value:'';el.textContent=v?fd(v):'—'}
 function appRow(a,i){
   a=a||{};
-  return '<div class="app" data-app="'+i+'"><div class="top2"><span>Applicant '+(i+1)+'</span><button type="button" class="btn ghost sm" data-rmapp="'+i+'">Remove</button></div><div class="grid">'+
+  return '<div class="app" data-app="'+i+'"><div class="top2"><span>'+(dirMode?'Director ':'Applicant ')+(i+1)+'</span><button type="button" class="btn ghost sm" data-rmapp="'+i+'">Remove</button></div><div class="grid">'+
    '<label class="f">Full name<input data-a="name" value="'+esc(a.name)+'"></label>'+
    '<label class="f">Date of birth<input data-a="dob" type="date" value="'+esc(a.dob)+'"></label>'+
    '<label class="f">Phone<input data-a="phone" type="tel" value="'+esc(a.phone)+'"><span class="pl">'+plinks(a.phone)+'</span></label>'+
@@ -498,11 +503,12 @@ function pickClient(){
 }
 var pendingSecMove=null;
 function borrowerFs(c){
-  var spv=c.borrowerType==='spv';
-  return '<fieldset><legend>Applying as</legend><div class="grid">'+sel('borrowerType','Borrower',spv?'spv':'personal',[['personal','Personal name'],['spv','Limited company (SPV)']])+
+  var spv=c.borrowerType==='spv';dirMode=spv;
+  return '<fieldset><legend>Applying as</legend><div class="grid">'+'<div class="f wide"><span>Borrower</span><div class="btabs" role="tablist" aria-label="Applying as"><button type="button" role="tab" class="btab pers" data-btab="personal" aria-selected="'+(!spv)+'">Personal name</button><button type="button" role="tab" class="btab spvt" data-btab="spv" aria-selected="'+spv+'">Limited company (SPV)</button></div><span style="display:none">'+sel('borrowerType','Borrower',spv?'spv':'personal',[['personal','Personal name'],['spv','Limited company (SPV)']])+'</span></div>'+
     '<span class="spvf" style="display:contents"'+(spv?'':' hidden')+'>'+fld('companyName','Company name',c.companyName)+fld('companyNumber','Company number',c.companyNumber)+'</span></div></fieldset>';
 }
-document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='f-borrowerType'){var f=document.querySelectorAll('#caseForm .spvf');f.forEach(function(s){s.hidden=x.value!=='spv'})}});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-btab]');if(!b)return;var s=document.getElementById('f-borrowerType');if(!s)return;s.value=b.getAttribute('data-btab');s.dispatchEvent(new Event('change',{bubbles:true}))});
+document.addEventListener('change',function(e){var x=e.target;if(x&&x.id==='f-borrowerType'){document.querySelectorAll('[data-btab]').forEach(function(b){b.setAttribute('aria-selected',String(b.getAttribute('data-btab')===x.value))});relabelDirs();var f=document.querySelectorAll('#caseForm .spvf');f.forEach(function(s){s.hidden=x.value!=='spv'})}});
 function startExisting(src,type){
   var ap=JSON.parse(JSON.stringify(src.applicants&&src.applicants.length?src.applicants:[{}]));
   var d={stage:'enquiry',type:TYPES.indexOf(type)>-1?type:'Purchase',repayment:'repayment',applicants:ap,propertyAddress:'',oneDriveLink:src.oneDriveLink||'',clientNo:src.clientNo||'',borrowerType:src.borrowerType||'',companyName:src.companyName||'',companyNumber:src.companyNumber||'',_from:src.id,_fromCase:1,notes:[{ts:Date.now(),text:'New case for an existing client: '+names(src)+(src.clientNo?' (see '+src.clientNo+')':'')+' · '+(TYPES.indexOf(type)>-1?type:'Purchase')+'.'}]};
@@ -520,14 +526,14 @@ function openNewChooser(){
     '<button type="button" class="btn" id="ncNew" style="width:100%;margin-bottom:14px">New client</button>'+
     '<div style="border-top:1px solid var(--line,#D4DBDF);padding-top:12px"><b>Or a new case for an existing client</b><div class="muted" style="font-size:13px;margin:2px 0 8px">Copies their names, contact details and OneDrive link. The new case starts at Enquiry.</div>'+
     '<label class="f" style="margin-bottom:8px">Case type<select id="ncType">'+TYPES.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')+'</select></label>'+
-    '<input id="ncQ" type="search" placeholder="Search by name or client number" aria-label="Search clients" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line,#D4DBDF);border-radius:8px;font:inherit;margin-bottom:8px"></div>'+
+    '<input id="ncQ" type="search" placeholder="Search by name, company or client number" aria-label="Search clients" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line,#D4DBDF);border-radius:8px;font:inherit;margin-bottom:8px"></div>'+
     '<div id="ncList" style="overflow:auto;border:1px solid var(--line,#D4DBDF);border-radius:8px;min-height:80px"></div></div>';
   document.body.appendChild(ov);
   function draw(){
     var q=(document.getElementById('ncQ').value||'').trim().toLowerCase(),n=0,h='';
     list.forEach(function(c){
       var label=names(c)+(c.clientNo?' ('+c.clientNo+')':'');
-      if(q&&label.toLowerCase().indexOf(q)<0&&names(c).toLowerCase().indexOf(q)<0)return;
+      if(q&&(label+' '+people(c)+' '+(c.companyName||'')+' '+(c.companyNumber||'')).toLowerCase().indexOf(q)<0&&!(q.replace(/[^a-z0-9]/g,'').length>=3&&coNo(c).toLowerCase().indexOf(q.replace(/[^a-z0-9]/g,''))>-1))return;
       if(++n>60)return;
       var k=sameClient(c).length;
       h+='<button type="button" data-ncpick="'+esc(c.id)+'" style="display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line,#E5EAED);padding:10px 12px;font:inherit;color:inherit;cursor:pointer"><span>'+esc(label)+'</span><span class="muted" style="font-size:12px;white-space:nowrap">'+k+' case'+(k===1?'':'s')+'</span></button>';
@@ -565,7 +571,7 @@ function openDrawer(id,draft){
   '<div class="strip"><div><b id="sLtv">'+(l?l.toFixed(1)+'%':'—')+'</b><span>LTV</span></div><div><b>'+(rateEndOf(c)?fd(rateEndOf(c)):'—')+'</b><span>Rate ends</span></div><div><b id="sRev">'+(reviewOf(c)?fd(reviewOf(c)):'—')+'</b><span>Review date</span></div></div></div>'+
   '<div class="dhb" style="display:flex;gap:8px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;flex:none">'+(id?'<button type="button" class="btn" id="bookBtn">Book appointment</button>':'')+(id?'<button type="button" class="btn" id="dupBtn" title="Same client, another property record">Add new property</button>':'')+'<button class="btn ghost" data-close aria-label="Close">Close</button></div></div>'+
   '<form id="caseForm" class="db" autocomplete="off">'+
-   (!id&&!draft?pickClient():'')+borrowerFs(c)+'<fieldset><legend>Applicants and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">Add applicant</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
+   (!id&&!draft?pickClient():'')+borrowerFs(c)+'<fieldset><legend id="dirLegend">'+(isSpv(c)?'Directors':'Applicants')+' and residential address</legend><div class="appsplit"><div class="appleft"><div id="apps">'+(c.applicants&&c.applicants.length?c.applicants:[{}]).map(appRow).join('')+'</div><button type="button" class="btn ghost sm" id="addApp">'+(isSpv(c)?'Add director':'Add applicant')+'</button><div class="grid" style="margin-top:10px">'+fld('clientNo','Client number',c.clientNo)+'</div></div><aside class="lkpane"><div class="lkt" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span id="lkTitle">Connected clients (0)</span><button type="button" class="btn ghost sm secbtn" id="lkToggle">Show</button></div><div id="linksBox" style="display:none"></div></aside></div></fieldset>'+
    propsFs(c,id)+
    secFs('lender','Lender')+
      sel('propUse','Property type',c.propUse,PROP_TYPES)+
@@ -1464,7 +1470,8 @@ function decorateSecs(){
   for(var i=0;i<fs.length;i++){
     var x=fs[i],lg=x.querySelector(':scope>legend');if(!lg||lg.querySelector('.colbtn'))continue;
     var t=(lg.firstChild&&lg.firstChild.nodeType===3?lg.firstChild.nodeValue:lg.textContent).replace(/\(\d+\)/,'').trim().toLowerCase();
-    if(t.indexOf('applicants')===0){x.setAttribute('data-col','applicants');continue}
+    if(t.indexOf('applicants')===0||t.indexOf('directors')===0){x.setAttribute('data-col','applicants');continue}
+    if(t==='applying as'){x.setAttribute('data-col','applying');continue}
     if(x.id==='pickClient'||x.querySelector('#pickSel,#pcSel'))continue;
     x.setAttribute('data-col',t);
     var open=!!colOpen[t];x.classList.toggle('col-closed',!open);
