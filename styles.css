@@ -553,6 +553,7 @@ body.apdragging,body.apdragging *{cursor:grabbing!important;user-select:none!imp
 .btabs{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}.btab{flex:1 1 180px;padding:12px 16px;border-radius:10px;font:700 15px system-ui,sans-serif;cursor:pointer;border:2px solid;background:transparent}
 .btab.pers{border-color:#0b7a75;color:#0b7a75}.btab.pers[aria-selected=true]{background:#0b7a75;color:#fff;box-shadow:0 2px 8px rgba(11,122,117,.45)}
 .btab.spvt{border-color:#d9480f;color:#d9480f}.btab.spvt[aria-selected=true]{background:#d9480f;color:#fff;box-shadow:0 2px 8px rgba(217,72,15,.45)}
+.resown[hidden]{display:none!important}
 .btab:focus-visible{outline:3px solid #f59f00;outline-offset:2px}.ptag.btl{background:#fff3e0;color:#e65100}.ptag.second{background:#f3e5f5;color:#4a148c}.ptag.holiday{background:#e0f7fa;color:#006064}
 tr.cg td{background:var(--bg);border-top:2px solid var(--line);padding:8px 12px;font-size:13px}
 

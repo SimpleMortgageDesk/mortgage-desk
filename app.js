@@ -419,6 +419,35 @@ function openTidyNos(){
     }
   });
 }
+var RES_ST=[['','Not asked'],['owner','Owner (owns the property)'],['renting','Renting'],['parents','Living with parents'],['other','Other']];
+function resSt(a){return a.resStatus||(a.resMort?'owner':'')}
+function resLabel(s){var r=RES_ST.filter(function(x){return x[0]===s})[0];return s&&r?r[1].replace(' (owns the property)',''):''}
+function resScore(a){var s=0;if(resSt(a))s+=4;if(a.resMort)s+=2;if(a.address)s+=1;['resLender','resType','resDealEnd','resBalance','resOwn','resRate'].forEach(function(k){if(a[k])s+=1});return s}
+function normAddr(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
+function resHTML(list){
+  if(!query.trim())return '';
+  var persons=[];
+  list.forEach(function(c){(c.applicants||[]).forEach(function(p){if(pNm(p)&&!persons.some(function(q){return samePerson(q.p,p)}))persons.push({p:p,c:c})})});
+  var rows=[];
+  persons.forEach(function(x){
+    var best=null,bc=null;
+    cases.forEach(function(c){(c.applicants||[]).forEach(function(a){if(samePerson(a,x.p)&&(!best||resScore(a)>resScore(best))){best=a;bc=c}})});
+    if(!best||(!best.address&&!resSt(best)))return;
+    var key=clientKey(x.c)+'|'+normAddr(best.address)+'|'+resSt(best)+'|'+(best.resMort||'')+'|'+(best.resLender||'');
+    var ex=rows.filter(function(r){return r.key===key})[0];
+    if(ex){ex.names.push(x.p.name);return}
+    rows.push({key:key,names:[x.p.name],a:best,c:x.c});
+  });
+  var h='<div class="resprops"><h3 style="margin:18px 0 6px">Main residence</h3>';
+  if(!rows.length)return h+'<div class="muted">No residential details are recorded for these clients yet. Open a case and fill in "Living at this address as" under the applicant.</div></div>';
+  h+='<div class="tw"><table><thead><tr><th class="cnoh">No.</th><th>Client</th><th>Address</th><th>Living as</th><th>Mortgage</th><th>Lender</th><th>Type</th><th>Deal ends</th><th>Rate</th><th>Balance</th><th>Owned by</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var a=r.a,st=resSt(a),own=st==='owner',mt=own&&a.resMort==='yes',typ={'repayment':'Repayment','interest-only':'Interest only','part-and-part':'Part and part'}[a.resType]||'';
+    var dash='<span class="muted">—</span>';
+    h+='<tr class="click" data-open="'+r.c.id+'"><td class="cnocol">'+esc(r.c.clientNo||'')+'</td><td><b>'+esc(r.names.join(' & '))+'</b></td><td>'+(esc(a.address)||dash)+'</td><td>'+(esc(resLabel(st))||'<span class="muted">Not asked</span>')+'</td><td>'+(own?(a.resMort==='yes'?'Yes':a.resMort==='no'?'No (owned outright)':'<span class="muted">Not asked</span>'):dash)+'</td><td>'+(mt&&a.resLender?esc(a.resLender):dash)+'</td><td>'+(mt&&typ?typ:dash)+'</td><td>'+(mt&&a.resDealEnd?fd(a.resDealEnd):dash)+'</td><td>'+(mt&&a.resRate?esc(a.resRate)+'%':dash)+'</td><td>'+(mt&&a.resBalance?'£'+Number(a.resBalance).toLocaleString('en-GB'):dash)+'</td><td>'+(own&&a.resOwn?(a.resOwn==='joint'?'Joint names':'Sole name'):dash)+'</td></tr>';
+  });
+  return h+'</tbody></table></div></div>';
+}
 function pNm(p){return String(p.name||'').toLowerCase().replace(/\s+/g,' ').trim().replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s+/g,' ').trim().replace(/^(mr|mrs|miss|ms|dr|mx)\.?\s+/,'')}
 function samePerson(a,b){var x=pNm(a);return !!x&&x===pNm(b)&&(!a.dob||!b.dob||a.dob===b.dob)}
 function dirPropsHTML(list){
@@ -464,7 +493,7 @@ function casesHTML(){
     h+=caseRowHTML(c,g.length>1);
     });
   });
-  return h+'</tbody></table></div>'+dirPropsHTML(list);
+  return h+'</tbody></table></div>'+resHTML(list)+dirPropsHTML(list);
 }
 
 /* ---------- reminders ---------- */
@@ -569,11 +598,13 @@ function appRow(a,i){
    '<label class="f">Phone<input data-a="phone" type="tel" value="'+esc(a.phone)+'"><span class="pl">'+plinks(a.phone)+'</span></label>'+
    '<label class="f">Email<input data-a="email" type="email" value="'+esc(a.email)+'"><span class="pl el">'+elinks(a.email)+'</span></label>'+
    '<label class="f wide">Current address<input data-a="address" value="'+esc(a.address)+'"></label>'+
-   '<label class="f">Do you have a mortgage on this address?<select data-a="resMort"><option value=""'+(!a.resMort?' selected':'')+'>Not asked</option><option value="no"'+(a.resMort==='no'?' selected':'')+'>No</option><option value="yes"'+(a.resMort==='yes'?' selected':'')+'>Yes</option></select></label></div>'+
-   '<div class="grid resm"'+(a.resMort==='yes'?'':' hidden')+'>'+
+   '<label class="f">Living at this address as<select data-a="resStatus">'+RES_ST.map(function(u){return '<option value="'+u[0]+'"'+(resSt(a)===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
+   '<label class="f resown"'+(resSt(a)==='owner'?'':' hidden')+'>Do you have a mortgage on this address?<select data-a="resMort"><option value=""'+(!a.resMort?' selected':'')+'>Not asked</option><option value="no"'+(a.resMort==='no'?' selected':'')+'>No (owned outright)</option><option value="yes"'+(a.resMort==='yes'?' selected':'')+'>Yes</option></select></label></div>'+
+   '<div class="grid resm"'+(resSt(a)==='owner'&&a.resMort==='yes'?'':' hidden')+'>'+
    '<label class="f">Current lender<input data-a="resLender" value="'+esc(a.resLender)+'"></label>'+
    '<label class="f">Mortgage type<select data-a="resType">'+[['','Choose…'],['repayment','Repayment'],['interest-only','Interest only'],['part-and-part','Part and part']].map(function(u){return '<option value="'+u[0]+'"'+((a.resType||'')===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
    '<label class="f">Current deal ends<input data-a="resDealEnd" type="date" value="'+esc(a.resDealEnd)+'"></label>'+
+   '<label class="f">Interest rate (%)<input data-a="resRate" type="number" min="0" step="0.01" value="'+esc(a.resRate)+'"></label>'+
    '<label class="f">Approx. balance (£)<input data-a="resBalance" type="number" min="0" step="1" value="'+esc(a.resBalance)+'"></label>'+
    '<label class="f">Owned by<select data-a="resOwn">'+[['','Choose…'],['sole','Sole name'],['joint','Joint names']].map(function(u){return '<option value="'+u[0]+'"'+((a.resOwn||'')===u[0]?' selected':'')+'>'+u[1]+'</option>'}).join('')+'</select></label>'+
    '</div></div>';
@@ -756,7 +787,8 @@ function apNextHtml(cid){
   var a=up[0];return 'Next appointment: <b>'+new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', '+esc(a.time)+'</b>'+(a.mode?' · '+esc(a.mode):'')+(up.length>1?' · +'+(up.length-1)+' more':'');
 }
 function apClose(){var o=$('#apOv');if(o)o.remove();apEditId=null;apClash=false;apDpM=null}
-document.addEventListener('change',function(e){var x=e.target;if(x&&x.getAttribute&&x.getAttribute('data-a')==='resMort'){var row=x.closest('.app'),bx=row&&row.querySelector('.resm');if(bx){bx.hidden=x.value!=='yes';if(x.value==='yes'){var f=bx.querySelector('input');if(f)f.focus()}}}});
+document.addEventListener('change',function(e){var x=e.target;if(x&&x.getAttribute&&x.getAttribute('data-a')==='resStatus'){var rw=x.closest('.app');if(rw){var own=x.value==='owner',om=rw.querySelector('[data-a="resMort"]'),rl=rw.querySelector('.resown'),rb=rw.querySelector('.resm');if(rl)rl.hidden=!own;if(rb)rb.hidden=!(own&&om&&om.value==='yes')}return}
+  if(x&&x.getAttribute&&x.getAttribute('data-a')==='resMort'){var row=x.closest('.app'),bx=row&&row.querySelector('.resm');if(bx){bx.hidden=x.value!=='yes';if(x.value==='yes'){var f=bx.querySelector('input');if(f)f.focus()}}}});
 document.addEventListener('change',function(e){var x=e.target;if(!x)return;if(x.id==='apDur'){apClash=false;apDpRender()}else if(x.id==='apSlSel'){$('#apTime').value=x.value;apClash=false;apDpRender()}});
 var apDpM=null;
 function apT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
