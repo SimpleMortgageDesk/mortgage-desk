@@ -554,6 +554,9 @@ body.apdragging,body.apdragging *{cursor:grabbing!important;user-select:none!imp
 .btab.pers{border-color:#0b7a75;color:#0b7a75}.btab.pers[aria-selected=true]{background:#0b7a75;color:#fff;box-shadow:0 2px 8px rgba(11,122,117,.45)}
 .btab.spvt{border-color:#d9480f;color:#d9480f}.btab.spvt[aria-selected=true]{background:#d9480f;color:#fff;box-shadow:0 2px 8px rgba(217,72,15,.45)}
 .resown[hidden]{display:none!important}
+.pfhd{display:grid;grid-template-columns:2fr 2fr 1.4fr;gap:10px}@media(max-width:800px){.pfhd{grid-template-columns:1fr}}
+.pftab{border-collapse:collapse;min-width:1500px;width:100%;font-size:12px}.pftab th{background:var(--surface2,#F1F5F6);text-align:left;padding:6px 6px;font-size:11px;vertical-align:bottom;border:1px solid var(--line,#D4DBDF)}.pftab td{border:1px solid var(--line,#D4DBDF);padding:0}.pftab td input:not([type=checkbox]){width:100%;box-sizing:border-box;border:0;padding:7px 6px;background:transparent;color:inherit;font:inherit;min-width:70px}.pftab td input.pfman{background:rgba(255,214,102,.18)}.pftab input[data-pf$='.addr']{min-width:230px}.pftab input[data-pf$='.owners']{min-width:170px}.pftab input[data-pf$='.lender']{min-width:140px}.pftab input[data-pf$='.mdate']{min-width:95px}
+.pftab tr.pfoff td{opacity:.5}.pftab tr.pftot td{padding:7px 6px;background:var(--surface2,#F1F5F6)}.pftab td:first-child{text-align:center;padding:0 6px}
 .btab:focus-visible{outline:3px solid #f59f00;outline-offset:2px}.ptag.btl{background:#fff3e0;color:#e65100}.ptag.second{background:#f3e5f5;color:#4a148c}.ptag.holiday{background:#e0f7fa;color:#006064}
 tr.cg td{background:var(--bg);border-top:2px solid var(--line);padding:8px 12px;font-size:13px}
 
