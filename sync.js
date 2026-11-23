@@ -54,7 +54,7 @@
     location.href = AUTH + 'authorize?' + form(Object.assign({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: scopes(), state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: silent ? 'none' : (reauth ? 'login' : (hint ? 'login' : 'select_account')) }, reauth && ((tok() || {}).account || {}).mail ? { login_hint: tok().account.mail } : (hint ? { login_hint: hint } : {})));
   }
   async function tokenRequest(params) {
-    var ac = (typeof AbortController === 'function') ? new AbortController() : null, tm = ac ? setTimeout(function () { ac.abort(); }, Math.max(1, +(CFG.authTimeoutSeconds || 20)) * 1000) : 0, r;
+    var ac = (typeof AbortController === 'function') ? new AbortController() : null, tm = ac ? setTimeout(function () { ac.abort(); }, Math.max(1, +(CFG.authTimeoutSeconds || 45)) * 1000) : 0, r;
     try { r = await fetch(AUTH + 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(Object.assign({ client_id: CFG.clientId, scope: scopes() }, params)), signal: ac ? ac.signal : undefined }); }
     catch (fe) { if (fe && fe.name === 'AbortError') throw new TypeError('NetworkError: Microsoft did not answer in time'); throw fe; }
     finally { if (tm) clearTimeout(tm); }
@@ -1487,6 +1487,7 @@
     if (p.get('error')) { var m = p.get('error_description') || p.get('error'); lset('md.calwant', null); lset('md.reauth', null); clean(); var qe = new Error(m); if (/^(login_required|interaction_required|consent_required|account_selection_required)$/.test(p.get('error') || '')) qe.silent = true; throw qe; }
     var pk = null; try { pk = JSON.parse(localStorage.getItem('md.pkce') || 'null'); } catch (e) {}
     var code = p.get('code'), state = p.get('state'); clean();
+    try { overlay('<div style="background:#fff;border:1px solid #D4DBDF;border-radius:12px;padding:24px 28px;font:15px system-ui,sans-serif;color:#101C26;box-shadow:0 8px 30px rgba(16,28,38,.12)">Signing you in&hellip;<div style="margin-top:8px;font-size:13px;color:#58697A">This can take up to a minute on a slow connection.</div></div>'); } catch (e) {}
     if (!pk || pk.st !== state) throw new Error('Sign-in could not be verified. Please try again.');
     var prevAcc = (tok() || {}).account || {};
     var tj = await tokenRequest({ grant_type: 'authorization_code', code: code, redirect_uri: REDIRECT, code_verifier: pk.v });
@@ -1499,7 +1500,7 @@
     try { localStorage.removeItem('md.pkce'); } catch (e) {}
     var meMail = '';
     try {
-      var me = await (await gfetch('/me?$select=displayName,mail,userPrincipalName')).json();
+      var me = await Promise.race([gfetch('/me?$select=displayName,mail,userPrincipalName').then(function (r) { return r.json(); }), new Promise(function (_, rj) { setTimeout(function () { rj(new Error('slow')); }, 8000); })]);
       var t = tok(); t.account = { name: me.displayName || '', mail: me.mail || me.userPrincipalName || '' }; setTok(t); meMail = t.account.mail;
     } catch (e) {}
     /* Warn when this is a different Microsoft account from the one used here last time (each account has its own, separate client list). */
