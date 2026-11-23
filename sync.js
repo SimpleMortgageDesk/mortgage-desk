@@ -93,11 +93,13 @@
   /* ---------- local cache (IndexedDB) ---------- */
   var idb = null;
   function openIdb() {
-    return new Promise(function (res) {
+    return new Promise(function (res0) {
+      var done = false, res = function () { if (!done) { done = true; res0(); } };
+      setTimeout(res, 4000);
       try {
         var q = indexedDB.open('mortgage-desk', 1);
         q.onupgradeneeded = function () { var d = q.result; d.createObjectStore('docs', { keyPath: 'k' }); d.createObjectStore('dirty', { keyPath: 'k' }); };
-        q.onsuccess = function () { idb = q.result; res(); };
+        q.onsuccess = function () { if (done) { try { q.result.close(); } catch (e) {} return; } idb = q.result; res(); };
         q.onerror = function () { res(); };
       } catch (e) { res(); }
     });
@@ -1148,7 +1150,7 @@
     }
     if (!Object.keys(mem.cases).length) return false;
     var o = $('mdSign'); if (o) o.remove();
-    offlineOnly = true; readyRes({ collection: collection }); setState(); startLockWatch(); offlineBar();
+    offlineOnly = true; bootOk = true; readyRes({ collection: collection }); setState(); startLockWatch(); offlineBar();
     return true;
   }
   function offlineBar() {
@@ -1535,6 +1537,7 @@
     migrateToAppFolder();
     if (!Object.keys(mem.cases).length && mirOn()) { try { await mirLoad('this device had no copy yet'); } catch (e) {} }
     var o = $('mdSign'); if (o) o.remove();
+    bootOk = true;
     readyRes({ collection: collection });
     setTimeout(mirStart, 4000);
     setState();
@@ -1549,5 +1552,8 @@
     window.addEventListener('pagehide', function () { flush(); });
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
+  var bootOk = false;
   boot();
+  /* Safety net: if start-up has neither opened the app nor shown a sign-in screen after 12 seconds, show the sign-in screen. */
+  setTimeout(function () { try { if (!bootOk && !$('mdSign')) showSignIn('Sign-in did not finish. Press Sign in to try again. Your changes on this device are kept.'); } catch (e) {} }, 12000);
 })();
