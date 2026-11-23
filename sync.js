@@ -47,14 +47,17 @@
   function rand(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); }
   function form(o) { return Object.keys(o).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]); }).join('&'); }
 
-  async function startLogin(reauth, hint) {
+  async function startLogin(reauth, hint, silent) {
     var v = rand(48), st = rand(16);
     var h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
     try { localStorage.setItem('md.pkce', JSON.stringify({ v: v, st: st })); } catch (e) {}
-    location.href = AUTH + 'authorize?' + form(Object.assign({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: scopes(), state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: reauth ? 'login' : (hint ? 'login' : 'select_account') }, reauth && ((tok() || {}).account || {}).mail ? { login_hint: tok().account.mail } : (hint ? { login_hint: hint } : {})));
+    location.href = AUTH + 'authorize?' + form(Object.assign({ client_id: CFG.clientId, response_type: 'code', redirect_uri: REDIRECT, response_mode: 'query', scope: scopes(), state: st, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: silent ? 'none' : (reauth ? 'login' : (hint ? 'login' : 'select_account')) }, reauth && ((tok() || {}).account || {}).mail ? { login_hint: tok().account.mail } : (hint ? { login_hint: hint } : {})));
   }
   async function tokenRequest(params) {
-    var r = await fetch(AUTH + 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(Object.assign({ client_id: CFG.clientId, scope: scopes() }, params)) });
+    var ac = (typeof AbortController === 'function') ? new AbortController() : null, tm = ac ? setTimeout(function () { ac.abort(); }, Math.max(1, +(CFG.authTimeoutSeconds || 20)) * 1000) : 0, r;
+    try { r = await fetch(AUTH + 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(Object.assign({ client_id: CFG.clientId, scope: scopes() }, params)), signal: ac ? ac.signal : undefined }); }
+    catch (fe) { if (fe && fe.name === 'AbortError') throw new TypeError('NetworkError: Microsoft did not answer in time'); throw fe; }
+    finally { if (tm) clearTimeout(tm); }
     var j = await r.json().catch(function () { return {}; });
     if (!r.ok || j.error) { var e = new Error(j.error_description || j.error || 'Sign-in failed'); e.auth = true; e.code = j.error; throw e; }
     var old = tok() || {};
@@ -1128,6 +1131,33 @@
     if (!o) { o = document.createElement('div'); o.id = 'mdSign'; o.style.cssText = 'position:fixed;inset:0;z-index:300;background:#EDF0F1;display:flex;align-items:center;justify-content:center;padding:16px;font:15px system-ui,"Segoe UI",sans-serif;color:#101C26'; document.body.appendChild(o); }
     o.innerHTML = html; return o;
   }
+  var offlineOnly = false;
+  function offlineChoices() { return { dev: !!pinData() && Object.keys(mem.cases).length > 0, dir: mirOn() }; }
+  function offlineHtml() {
+    var c = offlineChoices(); if (!c.dev && !c.dir) return '';
+    return '<div style="margin-top:16px;border-top:1px solid #E1E7EA;padding-top:14px"><button id="mdOff" type="button" style="width:100%;padding:11px;border:1px solid #0A6B50;border-radius:8px;background:#fff;color:#0A6B50;font:600 14px system-ui;cursor:pointer">Open without signing in</button>' +
+      '<p style="color:#58697A;margin:8px 0 0;font-size:12.5px;line-height:1.4">Microsoft or OneDrive not answering? This opens ' + (c.dev ? 'the copy kept on this device' : 'the local copy in your folder') + '. Your changes are kept and uploaded the next time you sign in.</p>' +
+      (c.dev ? '<div id="mdOffPinRow" style="display:none;gap:8px;margin-top:10px"><input id="mdOffPin" type="password" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN" placeholder="Your PIN" style="flex:1;padding:10px;border:1px solid #C9D2D6;border-radius:8px;font-size:16px"><button id="mdOffGo" type="button" style="padding:10px 16px;border:0;border-radius:8px;background:#0A6B50;color:#fff;font:600 14px system-ui;cursor:pointer">Open</button></div>' : '') + '</div>';
+  }
+  async function startOffline() {
+    if (!Object.keys(mem.cases).length) {
+      if (!mirOn()) return false;
+      var h = await mirHandle(); if (!h) return false;
+      if ((await mirPerm(true)) !== 'granted') return false;
+      try { var r = await mirRead(h); if (r.docs) { mirLoaded = true; COLS.forEach(notify); } } catch (e) { return false; }
+    }
+    if (!Object.keys(mem.cases).length) return false;
+    var o = $('mdSign'); if (o) o.remove();
+    offlineOnly = true; readyRes({ collection: collection }); setState(); startLockWatch(); offlineBar();
+    return true;
+  }
+  function offlineBar() {
+    if ($('mdOffBar')) return;
+    var b = document.createElement('div'); b.id = 'mdOffBar';
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:180;background:#FFF6DD;color:#5a4300;border:1px solid #E8D28A;border-radius:10px;padding:8px 12px;font:13px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.18);display:flex;gap:10px;align-items:center;max-width:94vw';
+    b.innerHTML = '<span>Not signed in. Working from the copy on this device; changes upload after you sign in.</span><button type="button" id="mdOffIn" style="border:0;border-radius:6px;background:#0A6B50;color:#fff;padding:6px 12px;font:600 13px system-ui;cursor:pointer;white-space:nowrap">Sign in</button>';
+    document.body.appendChild(b); $('mdOffIn').onclick = function () { startLogin(false, ''); };
+  }
   function showSignIn(msg) {
     if (!msg) { try { if (localStorage.getItem('md.idleMsg')) { localStorage.removeItem('md.idleMsg'); msg = 'You were signed out after ' + idleLabel() + ' of inactivity. Sign in again to continue.'; } } catch (e) {} }
     var bad = !CFG.clientId || /PASTE/i.test(CFG.clientId);
@@ -1137,7 +1167,7 @@
       (bad ? '' : '<label for="mdUser" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">User ID (your sign-up email address)</label><input id="mdUser" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="name@outlook.com" value="' + esc(String(ls('md.lastMail') || '')) + '" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #B9C4CA;border-radius:8px;font:15px system-ui;margin-bottom:8px">' +
         '<p style="color:#58697A;margin:0 0 14px;font-size:12.5px;line-height:1.4">You will type your password on Microsoft\'s own secure page next. This app never sees it.</p>') +
       (bad ? '<p style="color:#A3261F;font-size:14px">This copy has not been set up yet (no Microsoft app ID).</p>' : '<button id="mdGo" style="width:100%;padding:12px;border:0;border-radius:8px;background:#0A6B50;color:#fff;font:600 15px system-ui;cursor:pointer">Sign in with Microsoft</button>') +
-      '<div id="mdErr" style="color:#A3261F;font-size:13px;margin-top:12px;min-height:16px">' + esc(msg || '') + '</div></div>');
+      '<div id="mdErr" style="color:#A3261F;font-size:13px;margin-top:12px;min-height:16px">' + esc(msg || '') + '</div>' + offlineHtml() + '</div>');
     var b = o.querySelector('#mdGo'), u = o.querySelector('#mdUser');
     var go = function () {
       var em = u ? u.value.trim() : '';
@@ -1145,9 +1175,45 @@
       b.disabled = true; startLogin(false, em);
     };
     if (b) b.onclick = go;
+    var ob = o.querySelector('#mdOff');
+    if (ob) {
+      var er2 = o.querySelector('#mdErr'), opin = o.querySelector('#mdOffPin'), ogo = o.querySelector('#mdOffGo');
+      var tryOpen = async function () {
+        if (pinData() && offlineChoices().dev) {
+          var v = opin ? opin.value.trim() : '', ok = false; try { ok = !!v && await pinCheck(v); } catch (x) {}
+          if (!ok) { er2.textContent = 'That PIN is not right.'; if (opin) opin.focus(); return; }
+        }
+        er2.textContent = 'Opening...';
+        var done = false; try { done = await startOffline(); } catch (x) {}
+        if (!done) er2.textContent = 'Could not open a local copy. Sign in with Microsoft instead.';
+      };
+      ob.onclick = function () {
+        var row = o.querySelector('#mdOffPinRow');
+        if (row && row.style.display === 'none') { row.style.display = 'flex'; if (opin) opin.focus(); return; }
+        tryOpen();
+      };
+      if (ogo) ogo.onclick = tryOpen;
+      if (opin) opin.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); tryOpen(); } };
+    }
     if (u) { u.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } }; if (!u.value) u.focus(); }
   }
-  function sessionExpired() { showSignIn('Your sign-in has expired. Please sign in again. Your unsaved changes are kept on this device.'); }
+  /* Quiet sign-in: only when the sign-in ran out by itself (never after Log out or the idle sign-out), at most once every 3 minutes. */
+  function canSilent() {
+    if (CFG.silentSignIn === false || !CFG.clientId || /PASTE/i.test(CFG.clientId)) return false;
+    if (ls('md.noauto') === '1' || ls('md.idleMsg') || !ls('md.lastMail')) return false;
+    if (navigator.onLine === false) return false;
+    var at = +ls('md.silentAt') || 0; if (Date.now() - at < 180000) return false;
+    return true;
+  }
+  function trySilent() {
+    if (!canSilent()) return false;
+    lset('md.silentAt', String(Date.now()));
+    try { overlay('<div style="background:#fff;border:1px solid #D4DBDF;border-radius:12px;padding:24px 28px;font:15px system-ui,sans-serif;color:#101C26;box-shadow:0 8px 30px rgba(16,28,38,.12)">Signing you in&hellip;</div>'); } catch (e) {}
+    startLogin(false, ls('md.lastMail'), true);
+    return true;
+  }
+  function sessionExpired() {
+    if (trySilent()) return; showSignIn('Your sign-in has expired. Please sign in again. Your unsaved changes are kept on this device.'); }
 
   /* ---------- account / settings ---------- */
   async function openAccount() {
@@ -1226,7 +1292,7 @@
   async function wipeAndReload(auto) {
     try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } } catch (e) {}
     try { if (navigator.serviceWorker) { var rg = await navigator.serviceWorker.getRegistrations(); await Promise.all(rg.map(function (r) { return r.unregister(); })); } } catch (e) {}
-    await idbClearAll(); setTok(null);
+    await idbClearAll(); setTok(null); lset('md.noauto', '1');
     try { localStorage.removeItem('md.pkce'); localStorage.removeItem('md.reauthOk'); } catch (e) {}
     if (auto) { try { localStorage.setItem('md.idleMsg', '1'); } catch (e) {} }
     location.replace(location.pathname + '?fresh=' + Date.now());
@@ -1416,7 +1482,7 @@
     if (p.get('fresh') && !p.get('code') && !p.get('error')) { history.replaceState(null, '', location.pathname); return; }
     if (!p.get('code') && !p.get('error')) { lset('md.calwant', null); lset('md.reauth', null); return; }
     var clean = function () { history.replaceState(null, '', location.pathname); };
-    if (p.get('error')) { var m = p.get('error_description') || p.get('error'); lset('md.calwant', null); lset('md.reauth', null); clean(); throw new Error(m); }
+    if (p.get('error')) { var m = p.get('error_description') || p.get('error'); lset('md.calwant', null); lset('md.reauth', null); clean(); var qe = new Error(m); if (/^(login_required|interaction_required|consent_required|account_selection_required)$/.test(p.get('error') || '')) qe.silent = true; throw qe; }
     var pk = null; try { pk = JSON.parse(localStorage.getItem('md.pkce') || 'null'); } catch (e) {}
     var code = p.get('code'), state = p.get('state'); clean();
     if (!pk || pk.st !== state) throw new Error('Sign-in could not be verified. Please try again.');
@@ -1427,7 +1493,7 @@
       if (/calendars\.readwrite/i.test(tj.scope || '')) { lset('md.cal', '1'); lset('md.calnote', 'Calendar reminders are on.'); }
       else lset('md.calnote', 'Microsoft did not grant calendar access, so reminders are still off.');
     }
-    markAct();
+    markAct(); lset('md.noauto', null);
     try { localStorage.removeItem('md.pkce'); } catch (e) {}
     var meMail = '';
     try {
@@ -1462,8 +1528,8 @@
   async function boot() {
     addSyncBadge();
     await openIdb(); await loadCache();
-    try { await handleRedirect(); } catch (e) { showSignIn(e.message); return; }
-    if (!tok()) { showSignIn(''); return; }
+    try { await handleRedirect(); } catch (e) { if (e && e.silent) { showSignIn('Please sign in again. Your changes on this device are kept.'); return; } showSignIn((e instanceof TypeError || /NetworkError|Failed to fetch|Load failed/i.test((e && e.message) || '')) ? 'Microsoft could not be reached, or did not answer in time. Check your connection and try again. If your clients are kept on this device you can open them below.' : e.message); return; }
+    if (!tok()) { if (trySilent()) return; showSignIn(''); return; }
     if (isIdle()) { if (await autoSignOut()) return; }
     startIdleWatch(); startLockWatch(); setTimeout(pinWarnMaybe, 2500);
     migrateToAppFolder();
