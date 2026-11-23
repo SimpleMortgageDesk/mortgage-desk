@@ -1536,7 +1536,7 @@
     if (isIdle()) { if (await autoSignOut()) return; }
     startIdleWatch(); startLockWatch(); setTimeout(pinWarnMaybe, 2500);
     migrateToAppFolder();
-    if (!Object.keys(mem.cases).length && mirOn()) { try { await mirLoad('this device had no copy yet'); } catch (e) {} }
+    if (!Object.keys(mem.cases).length && mirOn()) { try { await Promise.race([mirLoad('this device had no copy yet'), new Promise(function (r) { setTimeout(r, 10000); })]); } catch (e) {} }
     var o = $('mdSign'); if (o) o.remove();
     bootOk = true;
     readyRes({ collection: collection });
