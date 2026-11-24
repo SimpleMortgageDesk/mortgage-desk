@@ -692,30 +692,69 @@ function docExtract(text){
   for(i=0;i<lines.length;i++){if(/repayment (?:type|method)|type of repayment|how (?:you|will) repay/i.test(lines[i])){var L=lines[i]+' '+(lines[i+1]||'');var rv=/part (?:and|&) part|part repayment/i.test(L)?'part-and-part':/interest[- ]only/i.test(L)?'interest-only':/capital (?:and|&) interest|repayment/i.test(L.replace(/repayment (?:type|method)/ig,''))?'repayment':null;if(rv){add('repayment',rv,lines[i]);break}}}
   // early repayment charge: the percentages listed next to it
   for(i=0;i<lines.length;i++){if(/early repayment charge|\bERC\b/i.test(lines[i])){var seg=lines[i]+' '+(lines[i+1]||''),pc=seg.match(/\d{1,2}(?:\.\d+)?\s?%(?:[^\n%]{0,25}\d{1,2}(?:\.\d+)?\s?%){0,5}/);if(pc){add('erc',pc[0].replace(/\s+/g,' ').trim(),lines[i]);break}}}
-  // applicants: names with a title, plus labelled date of birth, email and phone (the first person gets the email and phone)
+  // applicants: titled names (or Title / First name / Surname labels), then each person's DOB, email, phone and home address
   var apps=[],seenN={};
+  var NM="[A-Za-z][A-Za-z0-9'’\\-]*",TT="(?:MR|MRS|MS|MISS|MX|DR|PROF)\\.?";
+  var nameRe=new RegExp("^(?:(?:applicants?|borrowers?|customers?|clients?|names?)(?:\\s*\\d)?\\s*[:\\-]\\s*)?("+TT+"\\s+"+NM+"(?:\\s+"+NM+"){0,3}(?:\\s+(?:and|&)\\s+"+TT+"\\s+"+NM+"(?:\\s+"+NM+"){0,3})*)\\s*$","i");
   lines.forEach(function(l){
-    var mm=l.match(/^(?:(?:applicants?|borrowers?|customers?|clients?|names?)(?:\s*\d)?\s*[:\-]\s*)?((?:(?:MR|MRS|MS|MISS|MX|DR|PROF)\.?\s+[A-Za-z][A-Za-z0-9'’\-]*(?:\s+[A-Za-z][A-Za-z0-9'’\-]*){0,3})(?:\s+(?:and|&)\s+(?:(?:MR|MRS|MS|MISS|MX|DR|PROF)\.?\s+[A-Za-z][A-Za-z0-9'’\-]*(?:\s+[A-Za-z][A-Za-z0-9'’\-]*){0,3}))*)\s*$/i);
-    if(!mm)return;
-    mm[1].split(/\s+(?:and|&)\s+(?=(?:MR|MRS|MS|MISS|MX|DR|PROF)\b)/i).forEach(function(n){n=n.trim();var k=n.toLowerCase();if(n&&!seenN[k]&&apps.length<4){seenN[k]=1;apps.push({name:n})}});
+    var mm=l.match(nameRe);if(!mm)return;
+    mm[1].split(new RegExp("\\s+(?:and|&)\\s+(?="+TT+"\\b)","i")).forEach(function(n){n=n.trim();var k=n.toLowerCase();if(n&&!seenN[k]&&apps.length<4){seenN[k]=1;apps.push({name:n})}});
   });
-  var dobs=[];lines.forEach(function(l,j){if(/date of birth|\bD\.?O\.?B\b/i.test(l)){var d=docDate(l.replace(/^.*?(date of birth|DOB)\s*[:\-]?/i,''),1)||docDate(lines[j+1]||'',1);if(d)dobs.push(d)}});
-  dobs.forEach(function(d,j){if(apps[j])apps[j].dob=d});
-  var em=all.match(/(?:e-?mail(?: address)?)\s*[:\-]?\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i);if(em&&apps[0])apps[0].email=em[1];
-  var ph=all.match(/(?:mobile|telephone|phone|tel)(?: number| no\.?)?\s*[:\-]?\s*((?:\+44\s?|0)\d[\d ]{8,12}\d)/i);if(ph&&apps[0])apps[0].phone=ph[1].replace(/\s+/g,' ').trim();
+  if(!apps.length){
+    var tl=[],fl=[],sl=[];
+    lines.forEach(function(l){var m1=l.match(/^title\s*[:\-]?\s*(mr|mrs|ms|miss|mx|dr|prof)\b/i),m2=l.match(/^(?:first(?: name)?s?|forenames?)\s*[:\-]\s*(\S.{0,40})$/i),m3=l.match(/^(?:surname|last name|family name)\s*[:\-]\s*(\S.{0,40})$/i);if(m1)tl.push(m1[1]);if(m2)fl.push(m2[1].trim());if(m3)sl.push(m3[1].trim())});
+    for(var q=0;q<Math.min(fl.length,sl.length,4);q++)apps.push({name:((tl[q]?tl[q].toUpperCase()+' ':'')+fl[q]+' '+sl[q]).replace(/\s+/g,' ')});
+  }
+  function many(re){var o=[],m;re=new RegExp(re.source,'gi');while((m=re.exec(all)))o.push(m);return o}
+  var dobL=[];lines.forEach(function(l,j){if(/date of birth|\bD\.?O\.?B\b/i.test(l)){var d=docDate(l.replace(/^.*?(date of birth|DOB)\s*[:\-]?/i,''),1)||docDate(lines[j+1]||'',1);if(d)dobL.push(d)}});
+  var emL=many(/e-?mail(?: address)?\s*[:\-]?\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/).map(function(m){return m[1]});
+  var phL=many(/(?:mobile|telephone|phone|tel|contact number)(?: number| no\.?)?\s*[:\-]?\s*((?:\+44\s?|0)\d[\d ]{8,12}\d)/).map(function(m){return m[1].replace(/\s+/g,' ').trim()});
+  var adL=many(/(?:current address|home address|residential address|correspondence address|your address|address of (?:the )?applicant|applicant(?:'|’)?s address)\s*[:\-]?\s*\n?\s*([^\n]{4,110}?[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/).map(function(m){return m[1].replace(/\s+/g,' ').trim()});
+  apps.forEach(function(a,j){
+    if(dobL[j])a.dob=dobL[j];
+    if(emL[j]||(apps.length===1&&emL[0]))a.email=emL[j]||emL[0];
+    if(phL[j]||(apps.length===1&&phL[0]))a.phone=phL[j]||phL[0];
+    if(adL[j]||(apps.length>1&&adL.length===1&&j===0))a.address=adL[j]||adL[0];
+  });
+  // property use and case type, from clear wording (check these in the review list)
+  var puv=null,puw='';
+  if(/buy[- ]to[- ]let|\bBTL\b|let property/i.test(all)){puv='btl';puw=(all.match(/buy[- ]to[- ]let|\bBTL\b|let property/i)||[''])[0]}
+  else if(/second (?:home|residence)/i.test(all)){puv='second';puw='second home'}
+  else if(/holiday (?:home|let)/i.test(all)){puv='holiday';puw='holiday home'}
+  else if(/owner[- ]occup|main residence|residential (?:mortgage|purchase)|your (?:new )?home/i.test(all)){puv='main';puw=(all.match(/owner[- ]occup\w*|main residence|residential (?:mortgage|purchase)|your (?:new )?home/i)||[''])[0]}
+  if(puv)add('propUse',puv,puw);
+  var tyv=null,tyw='';
+  [[/product transfer|product switch/i,'Product transfer'],[/further advance|additional borrowing/i,'Further advance'],[/re-?mortgage|switching (?:your )?mortgage/i,'Remortgage'],[/first[- ]time buyer|\bFTB\b/i,'First-time buyer']].some(function(p){var m=all.match(p[0]);if(m){tyv=p[1];tyw=m[0];return true}});
+  if(!tyv&&puv==='btl'){tyv='Buy to let';tyw='buy to let'}
+  if(!tyv&&(out.some(function(o){return o.k==='purchasePrice'})||/\bpurchase\b/i.test(all))){tyv='Purchase';tyw='purchase'}
+  if(tyv)add('type',tyv,tyw);
+  add('stage',isOffer?'offer':isDip?'dip':null,isOffer?'mortgage offer':'decision in principle');
+  // limited company
+  var cn=first(/(?:company (?:registration )?(?:number|no\.?)|registered (?:company )?(?:number|no\.?)|companies house (?:number|no\.?))\s*[:\-]?\s*((?:[A-Z]{2})?\d{6,8})\b/i);
+  if(cn){add('companyNumber',cn[1].toUpperCase(),cn[0]);add('borrowerType','spv','Company number found');
+    var cm=first(/(?:company name|borrower|limited company|name of company)\s*[:\-]\s*([^\n]{3,80}?(?:limited|ltd\.?|llp|plc))\b/i)||first(/^([A-Z][^\n]{2,70}?\s(?:limited|ltd\.?|llp|plc))\s*$/im);
+    if(cm)add('companyName',cm[1].trim(),cm[0])}
+  // conveyancer and estate agent (kept in the note, there is no field for them)
+  var cv=first(/(?:conveyancer|solicitor|legal representative)s?\s*[:\-]\s*([^\n]{3,80})/i),ea=first(/(?:estate agent|selling agent)\s*[:\-]\s*([^\n]{3,80})/i);
+  var kd=[];
+  function kdate(k,l){var it=out.filter(function(o){return o.k===k})[0];if(it)kd.push(l+' '+fd(it.v))}
+  kdate('dipDate','AIP date');kdate('dipExpiry','AIP expires');kdate('offerDate','Offer date');kdate('offerExpiry','Offer expires');kdate('completionDate','Completion date');
+  if(cv)kd.push('Conveyancer: '+cv[1].trim());if(ea)kd.push('Estate agent: '+ea[1].trim());
   var kind=isOffer?'mortgage offer':isDip?'decision in principle':'document';
+  var noteText=kd.length?('From the '+kind+': '+kd.join('; ')+'.'):'';
   // what we deliberately ignore
   var skipped=[];
   if(/\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D]\b/.test(flat)||/national insurance/i.test(flat))skipped.push('National Insurance numbers');
   if(/sort code|account number|iban/i.test(flat))skipped.push('bank details');
   if(/passport|driving licen[cs]e|share code|\bUTR\b/i.test(flat))skipped.push('ID details');
   if(/salary|income|expenditure|outgoings|health|smok/i.test(flat))skipped.push('income, spending or health answers');
-  return {items:out,kind:kind,skipped:skipped,applicants:apps,isOffer:isOffer,isDip:isDip};
+  return {items:out,kind:kind,skipped:skipped,applicants:apps,isOffer:isOffer,isDip:isDip,noteText:noteText};
 }
-var DOC_FIELDS={lender:['Lender name','text'],loanAmount:['Loan amount','gbp'],propertyValue:['Valuation','gbp'],purchasePrice:['Purchase price','gbp'],monthlyPayment:['Monthly payment','gbp'],termYears:['Initial term (years)','num'],rate:['Initial rate (%)','pct'],followOnRate:['Rate after (%)','pct'],fixedUntil:['Initial deal ends','date'],dipDate:['AIP date','date'],dipExpiry:['AIP expires','date'],dipAmount:['AIP amount','gbp'],offerDate:['Offer date','date'],offerExpiry:['Offer expires','date'],completionDate:['Completion date','date'],product:['Product code','text'],lenderRef:['Lender reference','text'],propertyAddress:['Property address','text'],repayment:['Repayment method','rep'],erc:['Early repayment charge','text']};
-var DOC_ORDER=['lender','propertyAddress','loanAmount','propertyValue','purchasePrice','termYears','repayment','rate','fixedUntil','followOnRate','monthlyPayment','product','lenderRef','erc','dipDate','dipExpiry','dipAmount','offerDate','offerExpiry','completionDate'];
+var DOC_FIELDS={lender:['Lender name','text'],loanAmount:['Loan amount','gbp'],propertyValue:['Valuation','gbp'],purchasePrice:['Purchase price','gbp'],monthlyPayment:['Monthly payment','gbp'],termYears:['Initial term (years)','num'],rate:['Initial rate (%)','pct'],followOnRate:['Rate after (%)','pct'],fixedUntil:['Initial deal ends','date'],dipDate:['AIP date','date'],dipExpiry:['AIP expires','date'],dipAmount:['AIP amount','gbp'],offerDate:['Offer date','date'],offerExpiry:['Offer expires','date'],completionDate:['Completion date','date'],product:['Product code','text'],lenderRef:['Lender reference','text'],propertyAddress:['Property address','text'],repayment:['Repayment method','rep'],erc:['Early repayment charge','text'],propUse:['Property type','pu'],type:['Case type','text'],stage:['Stage','stage'],borrowerType:['Applying as','bt'],companyName:['Company name','text'],companyNumber:['Company number','text']};
+var DOC_ORDER=['lender','propertyAddress','loanAmount','propertyValue','purchasePrice','termYears','repayment','rate','fixedUntil','followOnRate','monthlyPayment','product','lenderRef','erc','dipDate','dipExpiry','dipAmount','offerDate','offerExpiry','completionDate','type','propUse','stage','borrowerType','companyNumber','companyName'];
 function docShow(k,v){
   var f=DOC_FIELDS[k]||[k,'text'];if(v==null||v==='')return '';
+  if(f[1]==='pu')return (PROP_TYPES.filter(function(p){return p[0]===v})[0]||[0,v])[1];if(f[1]==='stage')return {dip:'AIP',offer:'Offered',enquiry:'Enquiry',application:'FMA'}[v]||v;if(f[1]==='bt')return v==='spv'?'Limited company (SPV)':'Personal';
   if(f[1]==='gbp')return '£'+Number(v).toLocaleString('en-GB');if(f[1]==='pct')return v+'%';if(f[1]==='date')return fd(v);
   if(f[1]==='rep')return {'repayment':'Repayment','interest-only':'Interest only','part-and-part':'Part and part'}[v]||v;
   return String(v);
@@ -746,23 +785,50 @@ function docRead(files){
     docReview(docExtract(text),files);
   }).catch(function(e){toast((e&&e.message)||'Could not read the document',false)});
 }
+function docNorm(n){return String(n||'').toLowerCase().replace(/^(?:(?:mr|mrs|ms|miss|mx|dr|prof)\.?\s+)+/,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+function docSameName(a,b){a=docNorm(a);b=docNorm(b);if(!a||!b)return false;if(a===b)return true;var x=a.split(' '),y=b.split(' ');return x[0]===y[0]&&x[x.length-1]===y[y.length-1]}
+function docSet(el,v){el.value=String(v);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))}
 function docReview(res,files){
   var old=document.getElementById('docOv');if(old)old.remove();
-  var items=res.items.slice().sort(function(a,b){return DOC_ORDER.indexOf(a.k)-DOC_ORDER.indexOf(b.k)});
-  var form=document.getElementById('caseForm');
-  items.forEach(function(it){var el=document.getElementById('f-'+it.k);it.cur=el?el.value:'';it.el=el});
-  items=items.filter(function(it){return it.el});
+  var items=[],sorted=res.items.slice().sort(function(a,b){return DOC_ORDER.indexOf(a.k)-DOC_ORDER.indexOf(b.k)});
+  sorted.forEach(function(it){
+    var el=document.getElementById('f-'+it.k);if(!el)return;
+    var f=DOC_FIELDS[it.k]||[it.k,'text'],cur=el.value,same=String(cur)===String(it.v),cs=cur===''?'':(f[1]==='gbp'||f[1]==='pct'?docShow(it.k,Number(cur)):(f[1]==='text'?cur:docShow(it.k,cur)));
+    items.push({label:f[0],show:docShow(it.k,it.v),cur:cur,curShow:cs,same:same,src:it.src,apply:function(){docSet(el,it.v)}});
+  });
+  var rowsNow=[].slice.call(document.querySelectorAll('#apps .app')),gv=function(r,k){var e=r.querySelector('[data-a="'+k+'"]');return e?e.value.trim():''};
+  var AK=[['dob','Date of birth','date'],['phone','Phone','text'],['email','Email','text'],['address','Current address','text']];
+  res.applicants.forEach(function(ap,ai){
+    var m=rowsNow.filter(function(r){return docSameName(gv(r,'name'),ap.name)})[0];
+    if(!m&&rowsNow.length===1&&!gv(rowsNow[0],'name'))m=rowsNow[0];
+    var who='Applicant '+(ai+1)+' ('+ap.name+')';
+    if(m){
+      if(!gv(m,'name'))items.push({label:who+': Name',show:ap.name,cur:'',curShow:'',same:false,src:'Name in the document',apply:function(){docSet(m.querySelector('[data-a="name"]'),ap.name)}});
+      AK.forEach(function(k){
+        if(!ap[k[0]])return;var e=m.querySelector('[data-a="'+k[0]+'"]');if(!e)return;var cur=e.value.trim();
+        items.push({label:who+': '+k[1],show:k[2]==='date'?fd(ap[k[0]]):ap[k[0]],cur:cur,curShow:k[2]==='date'&&cur?fd(cur):cur,same:cur===ap[k[0]],src:'Found in the document',apply:function(){docSet(e,ap[k[0]])}});
+      });
+    }else{
+      var sum=[ap.dob?'born '+fd(ap.dob):'',ap.phone,ap.email,ap.address].filter(Boolean).join(' · ');
+      items.push({label:'Add '+(isSpv({borrowerType:(document.getElementById('f-borrowerType')||{}).value})?'director':'applicant')+': '+ap.name,show:sum||'(name only)',cur:'',curShow:'',same:false,src:'Not on this case yet',apply:function(){
+        var rs=[].slice.call(document.querySelectorAll('#apps .app')),blank=rs.filter(function(r){return !gv(r,'name')&&!gv(r,'email')&&!gv(r,'phone')&&!gv(r,'address')&&!gv(r,'dob')})[0];
+        if(!blank){var ab=document.getElementById('addApp');if(ab)ab.click();rs=[].slice.call(document.querySelectorAll('#apps .app'));blank=rs[rs.length-1]}
+        if(!blank)return;docSet(blank.querySelector('[data-a="name"]'),ap.name);
+        AK.forEach(function(k){if(ap[k[0]]){var e=blank.querySelector('[data-a="'+k[0]+'"]');if(e)docSet(e,ap[k[0]])}});
+      }});
+    }
+  });
+  if(res.noteText&&openId){var nid=openId;items.push({label:'Add a note to the case',show:res.noteText,cur:'',curShow:'',same:false,src:'Key dates and contacts (there is no field for them)',apply:function(){var c4=currentCase();if(c4&&c4.id===nid)patch(nid,{notes:(c4.notes||[]).concat([{ts:Date.now(),text:res.noteText}])})}})}
   var ov=document.createElement('div');ov.id='docOv';
   ov.style.cssText='position:fixed;inset:0;z-index:290;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
   var rows=items.map(function(it,i){
-    var same=String(it.cur)===String(it.v),f=DOC_FIELDS[it.k]||[it.k,'text'],curShow=it.cur===''?'':(f[1]==='gbp'||f[1]==='pct'||f[1]==='date'||f[1]==='rep'?docShow(it.k,f[1]==='gbp'||f[1]==='pct'?Number(it.cur):it.cur):it.cur);
-    return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line,#E5EAED);cursor:pointer"><input type="checkbox" data-doci="'+i+'" '+(it.cur===''||same?'checked':'')+' style="margin-top:3px"><span style="flex:1;min-width:0"><b>'+esc(f[0])+'</b><br><span>'+esc(docShow(it.k,it.v))+'</span>'+(it.cur!==''&&!same?' <span class="muted" style="font-size:12px">· replaces "'+esc(curShow)+'"</span>':'')+(same?' <span class="muted" style="font-size:12px">· already the same</span>':'')+'<br><span class="muted" style="font-size:12px">From: '+esc(it.src)+'</span></span></label>';
+    return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--line,#E5EAED);cursor:pointer"><input type="checkbox" data-doci="'+i+'" '+(it.cur===''||it.same?'checked':'')+(it.same?' disabled':'')+' style="margin-top:3px"><span style="flex:1;min-width:0"><b>'+esc(it.label)+'</b><br><span>'+esc(it.show)+'</span>'+(it.cur!==''&&!it.same?' <span class="muted" style="font-size:12px">· replaces "'+esc(it.curShow)+'"</span>':'')+(it.same?' <span class="muted" style="font-size:12px">· already the same</span>':'')+'<br><span class="muted" style="font-size:12px">From: '+esc(it.src)+'</span></span></label>';
   }).join('');
-  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="Details found in the document" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(660px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
+  ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="Details found in the document" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(680px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h2 style="margin:0;font-size:20px">Details found</h2><button type="button" class="btn ghost" id="docX">Cancel</button></div>'+
    '<div class="muted" style="font-size:13px;margin-bottom:10px">Looks like a '+esc(res.kind)+' ('+esc(files.map(function(f){return f.name}).join(', '))+'). Tick what you want on this case. Please check each one against the document. The document itself is not saved.</div>'+
    (res.skipped.length?'<div style="font-size:13px;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#EEF3F6">Ignored on purpose: '+esc(res.skipped.join(', '))+'.</div>':'')+
-   (items.length?'<div style="overflow:auto;border:1px solid var(--line,#D4DBDF);border-radius:8px">'+rows+'</div>':'<div style="padding:14px;border:1px solid var(--line,#D4DBDF);border-radius:8px">Nothing could be found that matches the case fields. This reader works on text-based lender documents such as a decision in principle or a mortgage offer.</div>')+
+   (items.length?'<div style="overflow:auto;border:1px solid var(--line,#D4DBDF);border-radius:8px">'+rows+'</div>':'<div style="padding:14px;border:1px solid var(--line,#D4DBDF);border-radius:8px">Nothing could be found that matches the case. This reader works on text-based lender documents such as a decision in principle or a mortgage offer.</div>')+
    (items.length?'<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><button type="button" class="btn" id="docGo">Fill in ticked details</button></div>':'')+'</div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown',function(e){if(e.target===ov)ov.remove()});
@@ -771,10 +837,7 @@ function docReview(res,files){
     if(b.id==='docX'){ov.remove();return}
     if(b.id==='docGo'){
       var n=0;
-      ov.querySelectorAll('[data-doci]').forEach(function(x){
-        if(!x.checked)return;var it=items[+x.getAttribute('data-doci')];if(!it||!it.el||String(it.cur)===String(it.v))return;
-        it.el.value=String(it.v);it.el.dispatchEvent(new Event('input',{bubbles:true}));it.el.dispatchEvent(new Event('change',{bubbles:true}));n++;
-      });
+      ov.querySelectorAll('[data-doci]').forEach(function(x){if(!x.checked||x.disabled)return;var it=items[+x.getAttribute('data-doci')];if(!it)return;try{it.apply();n++}catch(er){}});
       ov.remove();toast(n?('Filled in '+n+' detail'+(n===1?'':'s')+'. Check them before relying on them.'):'Nothing was changed');
     }
   });
@@ -2539,9 +2602,10 @@ function importPdfs(files){
     ['dipDate','dipExpiry','dipAmount','offerDate','offerExpiry','completionDate'].forEach(function(k){delete d[k]});
     if(!r.items.length&&!r.applicants.length){toast('Nothing could be found that matches a case. This works on text-based lender documents such as a decision in principle or a mortgage offer.');return}
     d.applicants=r.applicants.length?r.applicants:[{}];
-    d.borrowerType='personal';d.stage=r.isOffer?'offer':r.isDip?'dip':'enquiry';
-    d.type=d.purchasePrice?'Purchase':'Remortgage';
-    d.notes=[{ts:Date.now(),text:'Created from PDF: '+files.map(function(f){return f.name}).join(', ')+'.'}];
+    if(d.borrowerType!=='spv')d.borrowerType='personal';
+    if(!d.stage)d.stage='enquiry';
+    if(!d.type)d.type=d.purchasePrice?'Purchase':'Remortgage';
+    d.notes=[{ts:Date.now(),text:'Created from PDF: '+files.map(function(f){return f.name}).join(', ')+'.'+(r.noteText?' '+r.noteText:'')}];
     $('#toast').hidden=true;
     openDrawer(null,d);newBase='';setTimeout(autoSave,300);
     toast('Case created from the document and saved. Check every detail before relying on it.');
