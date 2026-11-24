@@ -812,6 +812,26 @@
     }
     catch (e) { return { ok: false, msg: 'Could not write to the folder (' + (e && e.name || 'error') + ').' }; }
   }
+  /* Complete export: every field of every record in every collection, nothing left out (arrays are written out as readable text). */
+  function bkFlat(v) {
+    if (v == null || v === '') return '';
+    if (Array.isArray(v)) return v.map(function (x) { return Array.isArray(x) ? x.map(function (y) { return bkFlat(y); }).join(' | ') : bkFlat(x); }).filter(Boolean).join(' || ');
+    if (typeof v === 'object') return Object.keys(v).filter(function (k) { return v[k] !== '' && v[k] != null && k !== 'id'; }).map(function (k) { var x = v[k]; return k + ': ' + ((/^(ts|created|at|doneAt|createdAt|updatedAt)$/.test(k) && typeof x === 'number') ? bkTs(x) : bkFlat(x)); }).join('; ');
+    if (typeof v === 'boolean') return v ? 'yes' : 'no';
+    return String(v);
+  }
+  function bkFullCsv(col) {
+    var docs = Object.keys(mem[col]).map(function (id) { var d = clone(mem[col][id].data || {}); d.id = id; return d; });
+    if (!docs.length) return null;
+    if (col === 'cases') docs.sort(function (a, b) { return String(a.clientNo || 'zzz').localeCompare(String(b.clientNo || 'zzz'), 'en', { numeric: true }); });
+    var cols = [], seen = {};
+    docs.forEach(function (d) { Object.keys(d).forEach(function (k) { if (!seen[k]) { seen[k] = 1; cols.push(k); } }); });
+    cols = cols.filter(function (k) { return k === 'clientNo'; }).concat(cols.filter(function (k) { return k !== 'clientNo'; }));
+    function q(v) { v = v == null ? '' : String(v); return '"' + v.replace(/"/g, '""') + '"'; }
+    var rows = [cols.map(q).join(',')];
+    docs.forEach(function (d) { rows.push(cols.map(function (k) { var v = d[k]; return q((typeof v === 'number' && /^(ts|created|createdAt|updatedAt)$/.test(k)) ? bkTs(v) : bkFlat(v)); }).join(',')); });
+    return '\ufeff' + rows.join('\r\n') + '\r\n';
+  }
   async function bkRun(interactive) {
     if (bkRunning) return null;
     if (!bkPw()) return { nopw: true };
@@ -829,7 +849,9 @@
       var zipBytes = await bkZip([
         { name: 'Mortgage-Desk-Cases-' + day + '.pdf', data: bkPdf(all, stamp, pw) },
         { name: 'Mortgage-Desk-Cases-' + day + '.csv', data: new TextEncoder().encode(bkCsv(all)) }
-      ], pw);
+      ].concat(['cases', 'appointments', 'notebook', 'marketing'].map(function (col) {
+        var t = bkFullCsv(col); return t ? { name: 'Mortgage-Desk-Everything-' + col + '-' + day + '.csv', data: new TextEncoder().encode(t) } : null;
+      }).filter(Boolean)), pw);
       var blob = new Blob([zipBytes], { type: 'application/zip' });
       var res = { at: Date.now(), count: all.length };
       if (pick) { res.l1 = await bkWrite(g1, blob); res.l2 = await bkWrite(g2, blob); }
@@ -1051,7 +1073,7 @@
       var c = bkCfg(), hasPw = !!bkPw(), num = waNum(), editing = !hasPw || editPw, dis = editing ? '' : ' disabled', dstyle = editing ? '' : ';background:#EDF0F1;color:#8a98a3';
       ov.innerHTML = '<div style="background:#fff;color:#101C26;width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:12px;padding:22px 24px;font:14px system-ui,sans-serif;box-shadow:0 8px 30px rgba(16,28,38,.3)">' +
         '<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:20px">PDF/CSV Case Backup</h2><button class="btn ghost" data-b="close">Close</button></div>' +
-        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file. Two files are kept in each folder: Mortgage-Desk-Backup.zip (the latest) and Mortgage-Desk-Backup-Previous.zip (the one before, about a day older). Both open with the same password.</p>' +
+        '<p style="margin:12px 0;color:#58697A">Saves every case as a PDF and a CSV inside one password-protected ZIP file, together with complete CSV files holding every field of every case (all tasks, notes, applicants, securities), appointment, notebook and marketing record. Two files are kept in each folder: Mortgage-Desk-Backup.zip (the latest) and Mortgage-Desk-Backup-Previous.zip (the one before, about a day older). Both open with the same password.</p>' +
         '<h3 style="margin:14px 0 4px;font-size:15px">1. Where to save</h3>' +
         (pick ? loc('dir', 'Location 1', false) + loc('dir2', 'Location 2', true) : '<p style="margin:4px 0;color:#58697A;font-size:13px">This browser cannot save to a chosen folder (phones and some browsers). Back up now downloads the ZIP file to this device instead.</p>') +
         '<h3 style="margin:16px 0 4px;font-size:15px">2. Backup password</h3>' +
