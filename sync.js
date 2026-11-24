@@ -790,8 +790,9 @@
     var p = 'prompt'; try { p = await h.queryPermission({ mode: 'readwrite' }); } catch (e) {}
     if (p !== 'granted') {
       if (!interactive) return { ok: false, msg: 'Needs your permission. Open PDF/CSV Case Backup and press Back up now.' };
-      try { p = await h.requestPermission({ mode: 'readwrite' }); } catch (e) { p = 'denied'; }
-      if (p !== 'granted') return { ok: false, msg: 'Permission to the folder was not given.' };
+      var waited = false;
+      try { p = await Promise.race([h.requestPermission({ mode: 'readwrite' }), new Promise(function (r) { setTimeout(function () { waited = true; r('prompt'); }, 60000); })]); } catch (e) { p = 'denied'; }
+      if (p !== 'granted') return { ok: false, msg: waited ? 'The browser asked for permission to this folder but no answer came. Look under the address bar for "Allow editing files" and press Edit files, then press Back up now again. Or press Change and choose the folder again.' : 'Permission to the folder was not given.' };
     }
     return { ok: true, h: h };
   }

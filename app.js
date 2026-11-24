@@ -2053,13 +2053,35 @@ function saveCase(){
 
 /* ---------- export ---------- */
 function exportCsv(){
+  if(!confirm('This file is NOT password protected and holds every client\'s details, notes, tasks and appointments. Keep it somewhere private and delete it when you no longer need it. Continue?'))return;
   claude.use('downloads').then(function(dl){
     if(!dl){toast('Downloads are not available in this view');return}
-    var cols=['clientNo','stage','type','propertyAddress','purchasePrice','loanAmount','termYears','lender','lenderRef','product','rate','fixedUntil','reviewDate','monthlyPayment','dipExpiry','offerDate','offerExpiry','completionDate','conveyancer'];
-    function q(v){v=v==null?'':String(v);return '"'+v.replace(/"/g,'""')+'"'}
-    var lines=[['clients'].concat(cols).map(q).join(',')];
-    cases.forEach(function(c){lines.push([names(c)].concat(cols.map(function(k){return c[k]})).map(q).join(','))});
-    return dl.save({filename:'cases-'+iso(TODAY)+'.csv',data:lines.join('\n')}).then(function(){toast('CSV saved')},function(e){if(e&&e.code!=='declined')toast('Could not save the file')});
+    var TSK=/^(ts|created|at|doneAt|createdAt|updatedAt)$/;
+    function when(x){var d=new Date(x);return isNaN(d)?String(x):d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+    function flat(v){
+      if(v==null||v==='')return '';
+      if(Array.isArray(v))return v.map(function(x){return Array.isArray(x)?x.map(flat).join(' | '):flat(x)}).filter(Boolean).join(' || ');
+      if(typeof v==='object')return Object.keys(v).filter(function(k){return v[k]!==''&&v[k]!=null&&k!=='id'}).map(function(k){var x=v[k];return k+': '+((TSK.test(k)&&typeof x==='number')?when(x):flat(x))}).join('; ');
+      if(typeof v==='boolean')return v?'yes':'no';
+      return String(v);
+    }
+    function q(v){v=v==null?'':String(v);if(/^[=@]|^[+\-](?![\d\s(])/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'}
+    var seen={},keys=[];
+    cases.forEach(function(c){Object.keys(c).forEach(function(k){if(!seen[k]&&k!=='id'){seen[k]=1;keys.push(k)}})});
+    keys=keys.filter(function(k){return k==='clientNo'}).concat(keys.filter(function(k){return k!=='clientNo'}));
+    function apTxt(a){return [a.date?fd(a.date):'',a.time||'',a.type||'',a.mode||'',AP_STATUS[a.status]||a.status||'',a.where?'at '+a.where:'',a.notes||''].filter(Boolean).join(', ')}
+    var head=['Client no','Clients','Applicants','Dates of birth','Phones','Emails','Addresses','Appointments'].concat(keys.filter(function(k){return k!=='clientNo'}).map(function(k){return k}));
+    var lines=[head.map(q).join(',')];
+    function row(c,ap){
+      var a=(c&&c.applicants)||[];
+      var first=[c?c.clientNo:'',c?names(c):(ap[0]&&ap[0].who)||'',a.map(function(x){return x.name||''}).join(' | '),a.map(function(x){return x.dob?fd(x.dob):''}).join(' | '),a.map(function(x){return x.phone||''}).join(' | '),a.map(function(x){return x.email||''}).join(' | '),a.map(function(x){return x.address||''}).join(' | '),apSorted(ap).map(apTxt).join(' || ')];
+      var rest=keys.filter(function(k){return k!=='clientNo'}).map(function(k){var v=c?c[k]:'';return (typeof v==='number'&&TSK.test(k))?when(v):flat(v)});
+      lines.push(first.concat(rest).map(q).join(','));
+    }
+    cases.forEach(function(c){row(c,appts.filter(function(a){return a.caseId===c.id}))});
+    var ids={};cases.forEach(function(c){ids[c.id]=1});
+    appts.filter(function(a){return !a.caseId||!ids[a.caseId]}).forEach(function(a){row(null,[a])});
+    return dl.save({filename:'mortgage-desk-everything-'+iso(TODAY)+'.csv',data:'﻿'+lines.join('\r\n')+'\r\n'}).then(function(){toast('CSV saved with every record. It is not password protected, so keep it private.')},function(e){if(e&&e.code!=='declined')toast('Could not save the file')});
   });
 }
 
