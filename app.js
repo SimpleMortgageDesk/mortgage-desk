@@ -968,7 +968,8 @@ function openNewChooser(){
   ov.style.cssText='position:fixed;inset:0;z-index:260;background:rgba(8,14,18,.55);display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="New case" style="background:var(--surface,#fff);color:var(--ink,#101C26);width:min(560px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:12px;padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.3);font:14px system-ui,sans-serif">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h2 style="margin:0;font-size:20px">New case</h2><button type="button" class="btn ghost" id="ncX">Cancel</button></div>'+
-    '<button type="button" class="btn" id="ncNew" style="width:100%;margin-bottom:14px">New client</button>'+
+    '<button type="button" class="btn" id="ncNew" style="width:100%;margin-bottom:8px">New client</button>'+
+    '<button type="button" class="btn ghost" id="ncPdf" style="width:100%;margin-bottom:14px" title="Reads a lender PDF on this device and fills in the new case. The PDF is not saved.">New client from a PDF</button>'+
     '<div style="border-top:1px solid var(--line,#D4DBDF);padding-top:12px"><b>Or a new case for an existing client</b><div class="muted" style="font-size:13px;margin:2px 0 8px">Copies their names, contact details and OneDrive link. The new case starts at Enquiry.</div>'+
     '<label class="f" style="margin-bottom:8px">Case type<select id="ncType">'+TYPES.map(function(x){return '<option>'+esc(x)+'</option>'}).join('')+'</select></label>'+
     '<input id="ncQ" type="search" placeholder="Search by name, company or client number" aria-label="Search clients" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line,#D4DBDF);border-radius:8px;font:inherit;margin-bottom:8px"></div>'+
@@ -993,6 +994,7 @@ function openNewChooser(){
     var b=e.target.closest&&e.target.closest('button');if(!b)return;
     if(b.id==='ncX'){ov.remove();return}
     if(b.id==='ncNew'){ov.remove();openDrawer(null);return}
+    if(b.id==='ncPdf'){ov.remove();var pi=document.getElementById('pdfIn');if(pi)pi.click();return}
     var id=b.getAttribute('data-ncpick');if(id){var src=cases.filter(function(x){return x.id===id})[0],ty=document.getElementById('ncType').value;ov.remove();if(src)startExisting(src,ty)}
   });
   setTimeout(function(){var q=document.getElementById('ncQ');if(q)q.focus()},50);

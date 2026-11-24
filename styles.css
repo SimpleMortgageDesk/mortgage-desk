@@ -1,5 +1,4 @@
 [hidden]{display:none!important}html,body{margin:0}
-#pdfBtn,[data-act="pdf"]{display:none!important}
 /* Layout: sticky top bar with tabs, full-width work area; cases open in a right-hand drawer (full screen on phones). */
 :root{--tblbd:#7d8a96;
   --bg:#EDF0F1; --surface:#FFFFFF; --surface2:#F4F7F8; --line:#D4DBDF;
